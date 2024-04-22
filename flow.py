@@ -34,14 +34,18 @@ var_list = [
     "s4",
 ]
 
-conditions_list = ["pt", "ScEta", "phi", "fixedGridRhoAll"]
+conditions_list = ["pt", "ScEta", "phi", "fixedGridRhoAll", "mass"]
 
 plot_list = ["lead_" + s for s in var_list]
 plot_list.append("mass")
 
 input_list_lead = ["lead_" + s for s in var_list]
-conditions_list_lead = ["lead_" + s for s in conditions_list[:-1]]
+n_input = len(
+    input_list_lead
+)  # so i can add other information i need to the input list, but only use the here defined as input
+conditions_list_lead = ["lead_" + s for s in conditions_list[:-2]]
 conditions_list_lead.append("fixedGridRhoAll")
+conditions_list_lead.append("mass")
 
 
 def plot_hist(df_diphoton, df_g_jet, df_data, var):
@@ -127,7 +131,7 @@ combined_df = pd.concat([mc_df, df_data])
 selection_mass = (combined_df["mass"] > 100) & (combined_df["mass"] < 180)
 combined_df = combined_df[selection_mass]
 
-input_list_lead = input_list_lead + ["origin"] + ["weight"]
+input_list_lead = input_list_lead + ["min_mvaID"] + ["mass"] + ["origin"] + ["weight"]
 
 # Split the combined dataframe into inputs and conditions
 inputs = combined_df[input_list_lead]
@@ -194,31 +198,39 @@ training_inputs = normalize_weights(training_inputs, training_conditions)
 validation_inputs = normalize_weights(validation_inputs, validation_conditions)
 test_inputs = normalize_weights(test_inputs, test_conditions)
 
-# Separate the weights from the rest of the data
-training_inputs, training_weights = training_inputs[:, :-1], training_inputs[:, -1]
-validation_inputs, validation_weights = (
-    validation_inputs[:, :-1],
+# Separate the weights and meta data from the rest of the data
+training_inputs, training_meta_data, training_weights = (
+    training_inputs[:, :n_input],
+    training_inputs[:, n_input:-1],
+    training_inputs[:, -1],
+)
+validation_inputs, validation_meta_data, validation_weights = (
+    validation_inputs[:, :n_input],
+    validation_inputs[:, n_input:-1],
     validation_inputs[:, -1],
 )
-test_inputs, test_weights = test_inputs[:, :-1], test_inputs[:, -1]
-
+test_inputs, test_meta_data, test_weights = (
+    test_inputs[:, :n_input],
+    test_inputs[:, n_input:-1],
+    test_inputs[:, -1],
+)
 # %%
 # standardize the data
 
 np.save(
-    "input_means.npy",
-    training_inputs[:, :-1].mean(dim=0).numpy(),
+    "/home/home1/institut_3a/jaensch/Documents/BA/BA/Diphoton/input_means.npy",
+    training_inputs.mean(dim=0).numpy(),
 )
 np.save(
-    "input_std.npy",
-    training_inputs[:, :-1].std(dim=0).numpy(),
+    "/home/home1/institut_3a/jaensch/Documents/BA/BA/Diphoton/input_std.npy",
+    training_inputs.std(dim=0).numpy(),
 )
 np.save(
-    "conditions_means.npy",
+    "/home/home1/institut_3a/jaensch/Documents/BA/BA/Diphoton/conditions_means.npy",
     training_conditions[:, :-1].mean(dim=0).numpy(),
 )
 np.save(
-    "conditions_std.npy",
+    "/home/home1/institut_3a/jaensch/Documents/BA/BA/Diphoton/conditions_std.npy",
     training_conditions[:, :-1].std(dim=0).numpy(),
 )
 
@@ -232,7 +244,7 @@ np.save(
 ) = utlis.standardize(
     training_inputs,
     training_conditions,
-    path="/home/home1/institut_3a/jaensch/Documents/BA/BA/",
+    path="/home/home1/institut_3a/jaensch/Documents/BA/BA/Diphoton/",
 )
 
 (
@@ -245,7 +257,7 @@ np.save(
 ) = utlis.standardize(
     test_inputs,
     test_conditions,
-    path="/home/home1/institut_3a/jaensch/Documents/BA/BA/",
+    path="/home/home1/institut_3a/jaensch/Documents/BA/BA/Diphoton/",
 )
 
 (
@@ -258,7 +270,7 @@ np.save(
 ) = utlis.standardize(
     validation_inputs,
     validation_conditions,
-    path="/home/home1/institut_3a/jaensch/Documents/BA/BA/",
+    path="/home/home1/institut_3a/jaensch/Documents/BA/BA/Diphoton/",
 )
 
 torch.save(
@@ -270,9 +282,14 @@ torch.save(
     "/home/home1/institut_3a/jaensch/Documents/BA/BA/Diphoton/test_conditions.pt",
 )
 torch.save(
+    test_meta_data,
+    "/home/home1/institut_3a/jaensch/Documents/BA/BA/Diphoton/test_meta_data.pt",
+)
+torch.save(
     test_weights,
     "/home/home1/institut_3a/jaensch/Documents/BA/BA/Diphoton/test_weights.pt",
 )
+
 # %% flow training
 
 device = torch.device("cpu" if torch.cuda.is_available() else "cpu")
@@ -301,8 +318,8 @@ for key in dictionary:
 # %%
 # flow training
 flow = zuko.flows.NSF(
-    4,
-    context=5,
+    test_inputs.size()[1],
+    context=test_conditions.size()[1],
     bins=n_splines_bins,
     transforms=n_transforms,
     hidden_features=[aux_nodes] * aux_layers,
@@ -313,10 +330,10 @@ optimizer = torch.optim.AdamW(flow.parameters(), lr=initial_lr, weight_decay=1e-
 
 scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, "min", patience=10)
 
-training_inputs = training_inputs[:, :-1].to(device)
+training_inputs = training_inputs.to(device)
 training_conditions = training_conditions.to(device)
 
-validation_inputs = validation_inputs[:, :-1].to(device)
+validation_inputs = validation_inputs.to(device)
 validation_conditions = validation_conditions.to(device)
 
 training_loss_array = []

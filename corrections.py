@@ -20,81 +20,135 @@ from yaml import Loader
 # Set the mplhep style to CMS for plots
 hep.style.use("CMS")
 
-path = "/home/home1/institut_3a/jaensch/Documents/BA/BA/Diphoton/"
 device = torch.device("cpu")
 
-# Load test_inputs and test_conditions from files
-test_inputs = torch.load(path + "test_inputs.pt")
-test_conditions = torch.load(path + "test_conditions.pt")
-test_meta_data = torch.load(
-    path + "test_meta_data.pt"
-)  # contains columns ['min_mvaID'] + ['ScEta'] + ['mass'] + ["origin"]
-test_weights = torch.load(path + "test_weights.pt")
 
-test_inputs_diphoton = test_inputs[test_meta_data[:, -1] == 1]
-test_conditions_diphoton = test_conditions[test_meta_data[:, -1] == 1]
-test_meta_data_diphoton = test_meta_data[test_meta_data[:, -1] == 1]
-test_weights_diphoton = test_weights[test_meta_data[:, -1] == 1]
+def load_data(path):
+    # Load test_inputs and test_conditions from files
+    test_inputs = torch.load(path + "test_inputs.pt")
+    test_conditions = torch.load(path + "test_conditions.pt")
+    test_meta_data = torch.load(
+        path + "test_meta_data.pt"
+    )  # contains columns ['min_mvaID'] + ['ScEta'] + ['mass'] + ["origin"]
+    test_weights = torch.load(path + "test_weights.pt")
 
-test_inputs_gjet = test_inputs[test_meta_data[:, -1] == 0]
-test_conditions_gjet = test_conditions[test_meta_data[:, -1] == 0]
-test_meta_data_gjet = test_meta_data[test_meta_data[:, -1] == 0]
-test_weights_gjet = test_weights[test_meta_data[:, -1] == 0]
+    return test_inputs, test_conditions, test_meta_data, test_weights
 
 
-# Load the model
-model = torch.load(path + "results/saved_states/best_model_.pth")
+def split_data(test_inputs, test_conditions, test_meta_data, test_weights):
+    test_inputs_diphoton = test_inputs[test_meta_data[:, -1] == 1]
+    test_conditions_diphoton = test_conditions[test_meta_data[:, -1] == 1]
+    test_meta_data_diphoton = test_meta_data[test_meta_data[:, -1] == 1]
+    test_weights_diphoton = test_weights[test_meta_data[:, -1] == 1]
 
-stream = open(path + "flow_config.yaml", "r")
-dictionary = yaml.load(stream, Loader)
+    test_inputs_gjet = test_inputs[test_meta_data[:, -1] == 0]
+    test_conditions_gjet = test_conditions[test_meta_data[:, -1] == 0]
+    test_meta_data_gjet = test_meta_data[test_meta_data[:, -1] == 0]
+    test_weights_gjet = test_weights[test_meta_data[:, -1] == 0]
 
-for key in dictionary:
+    return (
+        test_inputs_diphoton,
+        test_conditions_diphoton,
+        test_meta_data_diphoton,
+        test_weights_diphoton,
+    ), (test_inputs_gjet, test_conditions_gjet, test_meta_data_gjet, test_weights_gjet)
 
-    # network configurations
-    n_transforms = dictionary[key]["n_transforms"]  # number of transformation
-    aux_nodes = dictionary[key]["aux_nodes"]  # number of nodes in the auxiliary network
-    aux_layers = dictionary[key][
-        "aux_layers"
-    ]  # number of auxiliary layers in each flow transformation
-    n_splines_bins = dictionary[key][
-        "n_splines_bins"
-    ]  # Number of rationale quadratic spline flows bins
 
-    # Some general training parameters
-    max_epoch_number = dictionary[key]["max_epochs"]
-    initial_lr = dictionary[key]["initial_lr"]
-    batch_size = dictionary[key]["batch_size"]
+def load_model(path):
+    # Load the model
+    model = torch.load(path + "results/saved_states/best_model_.pth")
 
-flow = zuko.flows.NSF(
-    test_inputs.size()[1],
-    context=test_conditions.size()[1],
-    bins=n_splines_bins,
-    transforms=n_transforms,
-    hidden_features=[aux_nodes] * aux_layers,
-)
-flow.to(device)
+    stream = open(path + "flow_config.yaml", "r")
+    dictionary = yaml.load(stream, Loader)
 
-flow.load_state_dict(
-    torch.load(
-        path + "results/saved_states/best_model_.pth", map_location=torch.device("cpu")
+    return model, dictionary
+
+
+def create_flow(test_inputs, test_conditions, dictionary, device):
+    for key in dictionary:
+        # network configurations
+        n_transforms = dictionary[key]["n_transforms"]  # number of transformation
+        aux_nodes = dictionary[key][
+            "aux_nodes"
+        ]  # number of nodes in the auxiliary network
+        aux_layers = dictionary[key][
+            "aux_layers"
+        ]  # number of auxiliary layers in each flow transformation
+        n_splines_bins = dictionary[key][
+            "n_splines_bins"
+        ]  # Number of rationale quadratic spline flows bins
+
+        # Some general training parameters
+        max_epoch_number = dictionary[key]["max_epochs"]
+        initial_lr = dictionary[key]["initial_lr"]
+        batch_size = dictionary[key]["batch_size"]
+
+    flow = zuko.flows.NSF(
+        test_inputs.size()[1],
+        context=test_conditions.size()[1],
+        bins=n_splines_bins,
+        transforms=n_transforms,
+        hidden_features=[aux_nodes] * aux_layers,
     )
-)
+    flow.to(device)
 
-samples_diphoton = utlis.apply_flow(
-    test_inputs_diphoton, test_conditions_diphoton, flow
-)
-samples_gjet = utlis.apply_flow(test_inputs_gjet, test_conditions_gjet, flow)
+    flow.load_state_dict(
+        torch.load(
+            path + "results/saved_states/best_model_.pth",
+            map_location=torch.device("cpu"),
+        )
+    )
 
-samples_diphoton = utlis.invert_standardization(samples_diphoton, path)
-samples_gjet = utlis.invert_standardization(samples_gjet, path)
+    return flow
 
 
+def apply_flow_and_invert_standardization(test_inputs, test_conditions, flow, path):
+    samples = utlis.apply_flow(test_inputs, test_conditions, flow)
+    samples = utlis.invert_standardization(samples, path)
+
+    return samples
+
+
+def load_parquet_files(path_df):
+    df_data = pd.read_parquet(path_df + "Data_postEE.parquet")
+    df_Diphoton = pd.read_parquet(path_df + "Diphoton_postEE.parquet")
+    df_GJEt = pd.read_parquet(path_df + "GJEt_postEE.parquet")
+
+    return df_data, df_Diphoton, df_GJEt
+
+
+# Set the path
+path = "/home/home1/institut_3a/jaensch/Documents/BA/BA/Diphoton/"
 path_df = "/net/scratch_cms3a/daumann/normalizing_flows_project/script_to_prepare_samples_for_paper/splited_parquet/Diphoton_samples/"
-df_data = pd.read_parquet(path_df + "Data_postEE.parquet")
-df_Diphoton = pd.read_parquet(path_df + "Diphoton_postEE.parquet")
-df_GJEt = pd.read_parquet(path_df + "GJEt_postEE.parquet")
 
-# %% plot histograms
+# Load the data
+test_inputs, test_conditions, test_meta_data, test_weights = load_data(path)
+
+# Split the data
+(diphoton_inputs, diphoton_conditions, diphoton_meta_data, diphoton_weights), (
+    gjet_inputs,
+    gjet_conditions,
+    gjet_meta_data,
+    gjet_weights,
+) = split_data(test_inputs, test_conditions, test_meta_data, test_weights)
+
+# Load the model and dictionary
+model, dictionary = load_model(path)
+
+# Create the flow
+flow = create_flow(test_inputs, test_conditions, dictionary, device)
+
+# Apply the flow and invert standardization
+samples_diphoton = apply_flow_and_invert_standardization(
+    diphoton_inputs, diphoton_conditions, flow, path
+)
+samples_gjet = apply_flow_and_invert_standardization(
+    gjet_inputs, gjet_conditions, flow, path
+)
+
+# Load parquet files
+df_data, df_Diphoton, df_GJEt = load_parquet_files(path_df)
+
 var_list = [
     "r9",
     "etaWidth",
@@ -139,9 +193,9 @@ def df_with_corr_mvaid(
 # Use the function for diphoton and gjet
 df_samples_diphoton = df_with_corr_mvaid(
     samples_diphoton,
-    test_conditions_diphoton,
-    test_meta_data_diphoton,
-    test_weights_diphoton,
+    diphoton_conditions,
+    diphoton_meta_data,
+    diphoton_weights,
     var_list,
     conditions_list,
     meta_data_list,
@@ -149,13 +203,13 @@ df_samples_diphoton = df_with_corr_mvaid(
 )
 df_samples_gjet = df_with_corr_mvaid(
     samples_gjet,
-    test_conditions_gjet,
-    test_meta_data_gjet,
-    test_weights_gjet,
+    gjet_conditions,
+    gjet_meta_data,
+    gjet_weights,
     var_list,
     conditions_list,
     meta_data_list,
-    "Gjet",
+    "GJet",
 )
 
 plot_list = ["lead_" + s for s in var_list]
@@ -212,8 +266,8 @@ analysis_generel(
     df_data,
     samples_diphoton,
     samples_gjet,
-    test_weights_diphoton,
-    test_weights_gjet,
+    diphoton_weights,
+    gjet_weights,
 )
 
 
@@ -314,16 +368,15 @@ analysis_m_cut(
     df_Diphoton,
     df_GJEt,
     df_data,
-    test_meta_data_diphoton,
-    test_meta_data_gjet,
-    test_inputs_diphoton,
-    test_conditions_diphoton,
-    test_weights_diphoton,
-    test_inputs_gjet,
-    test_conditions_gjet,
-    test_weights_gjet,
+    diphoton_meta_data,
+    gjet_meta_data,
+    diphoton_inputs,
+    diphoton_conditions,
+    diphoton_weights,
+    gjet_inputs,
+    gjet_conditions,
+    gjet_weights,
     m_low=150,
     m_high=180,
     mva_ID_cut=0.25,
 )
-# %%
