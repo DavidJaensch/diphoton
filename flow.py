@@ -21,10 +21,12 @@ from yaml import Loader
 hep.style.use("CMS")
 
 # %% get data and simulation
-path = "/net/scratch_cms3a/daumann/normalizing_flows_project/script_to_prepare_samples_for_paper/splited_parquet/Diphoton_samples/"
-df_data = pd.read_parquet(path + "Data_postEE.parquet")
-df_Diphoton = pd.read_parquet(path + "Diphoton_postEE.parquet")
-df_GJEt = pd.read_parquet(path + "GJEt_postEE.parquet")
+path_df = "/net/scratch_cms3a/daumann/normalizing_flows_project/script_to_prepare_samples_for_paper/splited_parquet/Diphoton_samples/"
+df_data = pd.read_parquet(path_df + "Data_postEE.parquet")
+df_Diphoton = pd.read_parquet(path_df + "Diphoton_postEE.parquet")
+df_GJEt = pd.read_parquet(path_df + "GJEt_postEE.parquet")
+
+path = "/home/home1/institut_3a/jaensch/Documents/BA/BA/Diphoton/"
 
 # %% plot histograms
 var_list = [
@@ -38,11 +40,13 @@ conditions_list = ["pt", "ScEta", "phi", "fixedGridRhoAll", "mass"]
 
 plot_list = ["lead_" + s for s in var_list]
 plot_list.append("mass")
+plot_list.append("pt")
 
 input_list_lead = ["lead_" + s for s in var_list]
 n_input = len(
     input_list_lead
 )  # so i can add other information i need to the input list, but only use the here defined as input
+n_conditions = len(conditions_list)
 conditions_list_lead = ["lead_" + s for s in conditions_list[:-2]]
 conditions_list_lead.append("fixedGridRhoAll")
 conditions_list_lead.append("mass")
@@ -106,9 +110,7 @@ def plot_hist(df_diphoton, df_g_jet, df_data, var):
     plt.ylabel("Events/Bin")
     plt.legend()
     hep.cms.label("Work in Progress", data=False)
-    plt.savefig(
-        f"/home/home1/institut_3a/jaensch/Documents/BA/BA/Diphoton/hist_{var}.png"
-    )
+    plt.savefig(path + f"hist_{var}.png")
     plt.show()
 
 
@@ -131,7 +133,28 @@ combined_df = pd.concat([mc_df, df_data])
 selection_mass = (combined_df["mass"] > 100) & (combined_df["mass"] < 180)
 combined_df = combined_df[selection_mass]
 
-input_list_lead = input_list_lead + ["min_mvaID"] + ["mass"] + ["origin"] + ["weight"]
+meta_list = [
+    "energyRaw",
+    "sieie",
+    "sieip",
+    "hoe",
+    "ecalPFClusterIso",
+    "hcalPFClusterIso",
+    "trkSumPtHollowConeDR03",
+    "trkSumPtSolidConeDR04",
+    "pfChargedIso",
+    "pfChargedIsoWorstVtx",
+    "esEffSigmaRR",
+    "esEnergyOverRawE",
+    "mvaID",
+    "mass",
+    "origin",
+    "weight",
+]
+
+meta_list_lead = ["lead_" + s for s in meta_list[:-3]] + meta_list[-3:]
+
+input_list_lead = input_list_lead + meta_list_lead
 
 # Split the combined dataframe into inputs and conditions
 inputs = combined_df[input_list_lead]
@@ -145,13 +168,26 @@ nan_rows = inputs.isnull().any(axis=1) | conditions.isnull().any(axis=1)
 # Drop these rows from both DataFrames
 inputs = inputs.loc[~nan_rows]
 conditions = conditions.loc[~nan_rows]
+all_info = combined_df.loc[~nan_rows]
 
 # Split the inputs and conditions into training, testing, and validation sets
-inputs_train, inputs_test, conditions_train, conditions_test = train_test_split(
-    inputs, conditions, test_size=0.2, random_state=42
-)
-inputs_train, inputs_val, conditions_train, conditions_val = train_test_split(
-    inputs_train, conditions_train, test_size=0.25, random_state=42
+(
+    inputs_train,
+    inputs_test,
+    conditions_train,
+    conditions_test,
+    all_info_train,
+    all_info_test,
+) = train_test_split(inputs, conditions, all_info, test_size=0.2, random_state=42)
+(
+    inputs_train,
+    inputs_val,
+    conditions_train,
+    conditions_val,
+    all_info_train,
+    all_info_val,
+) = train_test_split(
+    inputs_train, conditions_train, all_info_train, test_size=0.25, random_state=42
 )
 
 # From numpy to pytorch tensors
@@ -162,6 +198,8 @@ test_inputs = torch.Tensor(np.array(inputs_test))
 training_conditions = torch.Tensor(np.array(conditions_train))
 validation_conditions = torch.Tensor(np.array(conditions_val))
 test_conditions = torch.Tensor(np.array(conditions_test))
+
+all_info_test.to_csv(path + "all_info_test.csv", index=False)
 
 
 # %%
@@ -178,25 +216,61 @@ def normalize_weights(inputs, conditions):
         (1 - is_data_column).nonzero().squeeze()
     )  # Indices where is_data is False
 
+    scaling_factors = {}
+
     # Normalize weights for "data" if there are data samples
     if len(data_indices) > 0:
         data_weights = weights[data_indices]
-        normalized_data_weights = data_weights / len(data_weights)
+        scaling_factors["data"] = sum(data_weights)
+        normalized_data_weights = data_weights / scaling_factors["data"]
         inputs[data_indices, -1] = normalized_data_weights
 
     # Normalize weights for "not data" if there are not data samples
     if len(not_data_indices) > 0:
         not_data_weights = weights[not_data_indices]
-        normalized_not_data_weights = not_data_weights / len(not_data_weights)
+        scaling_factors["not_data"] = sum(not_data_weights)
+        normalized_not_data_weights = not_data_weights / scaling_factors["not_data"]
         inputs[not_data_indices, -1] = normalized_not_data_weights
+
+    return inputs, scaling_factors
+
+
+def apply_scaling(inputs, conditions, scaling_factors):
+    # Extract "is_data" column from conditions
+    is_data_column = conditions[:, -1]  # Assuming "is_data" is the last column
+
+    # Extract "weights" from inputs
+    weights = inputs[:, -1]  # Assuming "weights" is the last column
+
+    # Apply scaling factors separately for "data" and "not data" categories
+    data_indices = is_data_column.nonzero().squeeze()  # Indices where is_data is True
+    not_data_indices = (
+        (1 - is_data_column).nonzero().squeeze()
+    )  # Indices where is_data is False
+
+    # Apply scaling factor for "data" if there are data samples
+    if len(data_indices) > 0:
+        data_weights = weights[data_indices]
+        inputs[data_indices, -1] = data_weights / scaling_factors["data"]
+
+    # Apply scaling factor for "not data" if there are not data samples
+    if len(not_data_indices) > 0:
+        not_data_weights = weights[not_data_indices]
+        inputs[not_data_indices, -1] = not_data_weights / scaling_factors["not_data"]
 
     return inputs
 
 
-# Normalize the weights
-training_inputs = normalize_weights(training_inputs, training_conditions)
-validation_inputs = normalize_weights(validation_inputs, validation_conditions)
-test_inputs = normalize_weights(test_inputs, test_conditions)
+# Normalize the weights for the training set and get the scaling factors
+training_inputs, scaling_factors = normalize_weights(
+    training_inputs, training_conditions
+)
+
+# Apply the same scaling factors to the validation and test sets
+validation_inputs = apply_scaling(
+    validation_inputs, validation_conditions, scaling_factors
+)
+test_inputs = apply_scaling(test_inputs, test_conditions, scaling_factors)
 
 # Separate the weights and meta data from the rest of the data
 training_inputs, training_meta_data, training_weights = (
@@ -218,19 +292,19 @@ test_inputs, test_meta_data, test_weights = (
 # standardize the data
 
 np.save(
-    "/home/home1/institut_3a/jaensch/Documents/BA/BA/Diphoton/input_means.npy",
+    path + "input_means.npy",
     training_inputs.mean(dim=0).numpy(),
 )
 np.save(
-    "/home/home1/institut_3a/jaensch/Documents/BA/BA/Diphoton/input_std.npy",
+    path + "input_std.npy",
     training_inputs.std(dim=0).numpy(),
 )
 np.save(
-    "/home/home1/institut_3a/jaensch/Documents/BA/BA/Diphoton/conditions_means.npy",
+    path + "conditions_means.npy",
     training_conditions[:, :-1].mean(dim=0).numpy(),
 )
 np.save(
-    "/home/home1/institut_3a/jaensch/Documents/BA/BA/Diphoton/conditions_std.npy",
+    path + "conditions_std.npy",
     training_conditions[:, :-1].std(dim=0).numpy(),
 )
 
@@ -244,7 +318,7 @@ np.save(
 ) = utlis.standardize(
     training_inputs,
     training_conditions,
-    path="/home/home1/institut_3a/jaensch/Documents/BA/BA/Diphoton/",
+    path=path,
 )
 
 (
@@ -257,7 +331,7 @@ np.save(
 ) = utlis.standardize(
     test_inputs,
     test_conditions,
-    path="/home/home1/institut_3a/jaensch/Documents/BA/BA/Diphoton/",
+    path=path,
 )
 
 (
@@ -270,33 +344,49 @@ np.save(
 ) = utlis.standardize(
     validation_inputs,
     validation_conditions,
-    path="/home/home1/institut_3a/jaensch/Documents/BA/BA/Diphoton/",
+    path=path,
 )
 
 torch.save(
     test_inputs,
-    "/home/home1/institut_3a/jaensch/Documents/BA/BA/Diphoton/test_inputs.pt",
+    path + "test_inputs.pt",
 )
 torch.save(
     test_conditions,
-    "/home/home1/institut_3a/jaensch/Documents/BA/BA/Diphoton/test_conditions.pt",
+    path + "test_conditions.pt",
 )
 torch.save(
     test_meta_data,
-    "/home/home1/institut_3a/jaensch/Documents/BA/BA/Diphoton/test_meta_data.pt",
+    path + "test_meta_data.pt",
 )
 torch.save(
     test_weights,
-    "/home/home1/institut_3a/jaensch/Documents/BA/BA/Diphoton/test_weights.pt",
+    path + "test_weights.pt",
 )
+
+torch.save(
+    training_inputs,
+    path + "training_inputs.pt",
+)
+torch.save(
+    training_conditions,
+    path + "training_conditions.pt",
+)
+torch.save(
+    training_meta_data,
+    path + "training_meta_data.pt",
+)
+torch.save(
+    training_weights,
+    path + "training_weights.pt",
+)
+
 
 # %% flow training
 
 device = torch.device("cpu" if torch.cuda.is_available() else "cpu")
 
-stream = open(
-    "/home/home1/institut_3a/jaensch/Documents/BA/BA/Diphoton/flow_config.yaml", "r"
-)
+stream = open(path + "flow_config.yaml", "r")
 dictionary = yaml.load(stream, Loader)
 
 for key in dictionary:
@@ -342,13 +432,14 @@ validation_loss_array = []
 training_inputs = training_inputs.type(dtype=training_conditions.dtype)
 flow = flow.type(training_inputs.dtype)
 
-training_weights = training_weights / torch.sum(training_weights)
-validation_weights = validation_weights / torch.sum(validation_weights)
+# training_weights = training_weights / torch.sum(training_weights)
+# validation_weights = validation_weights / torch.sum(validation_weights)
+
+print(training_weights)
+print(validation_weights)
 
 print("Start training")
-save_dir = (
-    "/home/home1/institut_3a/jaensch/Documents/BA/BA/Diphoton/results/saved_states"
-)
+save_dir = path + "results/saved_states"
 os.makedirs(save_dir, exist_ok=True)
 for epoch in range(999):
     for batch in range(250):
@@ -373,7 +464,9 @@ for epoch in range(999):
         save_dir + "/epoch_" + str(epoch) + ".pth",
     )
     with torch.no_grad():
-        idxs = torch.randint(low=0, high=validation_inputs.size()[0], size=(1024,))
+        idxs = torch.randint(
+            low=0, high=validation_inputs.size()[0], size=(batch_size,)
+        )
 
         validation_loss = validation_weights[idxs].to(device) * (
             -flow(validation_conditions[idxs]).log_prob(validation_inputs[idxs])
@@ -421,7 +514,7 @@ for epoch in range(999):
 utlis.plot_loss_cruve(
     training_loss_array,
     validation_loss_array,
-    "/home/home1/institut_3a/jaensch/Documents/BA/BA/Diphoton/",
+    path,
 )
 
 # %%

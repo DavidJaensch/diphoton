@@ -1,7 +1,7 @@
 configuration:
   n_transforms   : 5
   aux_nodes      : 128
-  aux_layers     : 2
+  aux_layers     : 3
   n_splines_bins : 8
   initial_lr     : 1.0e-3
   batch_size     : 1024

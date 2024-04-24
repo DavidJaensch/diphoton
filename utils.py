@@ -173,7 +173,14 @@ def plot_hist_subplots(
     )
     axs[0].set_xlabel(var)
     axs[0].set_ylabel("Frequency")
-    axs[0].legend()
+    axs[0].legend(
+        title="Uncorrected",
+        frameon=True,
+        fancybox=True,
+        edgecolor="black",
+        facecolor="white",
+        framealpha=1,
+    )
     hep.cms.label("Work in Progress", data=False, ax=axs[0])
 
     # Create the diphoton and g_jet sample histograms and stack them
@@ -202,19 +209,9 @@ def plot_hist_subplots(
         [hist_samples_diphoton, hist_samples_gjet],
         stack=True,
         histtype="fill",
-        label=["Diphoton samples", "GJet samples"],
+        label=["Diphoton MC", "GJet MC"],
         ax=axs[1],
     )
-
-    # Create the data histogram and plot it with only the top marks
-    hist_data = (
-        hist.Hist.new.Reg(num_bins, min_value, max_value)
-        .Weight()
-        .fill(df_data[var], weight=df_data["weight"])
-    )
-
-    # Normalize the data histogram
-    hist_data = hist_data / (hist_data.values().sum() * bin_width)
 
     bin_edges = hist_data.axes[0].edges
     bin_centers = 0.5 * (bin_edges[:-1] + bin_edges[1:])
@@ -224,10 +221,17 @@ def plot_hist_subplots(
 
     axs[1].set_xlabel(var)
     axs[1].set_ylabel("Frequency")
-    axs[1].legend()
+    axs[1].legend(
+        title="Corrected",
+        frameon=True,
+        fancybox=True,
+        edgecolor="black",
+        facecolor="white",
+        framealpha=1,
+    )
     axs[0].text(
-        0.05,
-        0.95,
+        0.03,
+        0.93,
         title,
         transform=axs[0].transAxes,
         fontsize=14,
@@ -262,7 +266,9 @@ def plot_hist_subplots(
     axs[2].set_xlabel(var)
     axs[2].set_ylabel("Ratio")
     axs[2].set_ylim(0.2, 1.8)
-    axs[2].legend()
+    axs[2].legend(
+        frameon=True, fancybox=True, edgecolor="black", facecolor="white", framealpha=1
+    )
 
     plt.tight_layout()
     plt.savefig(
@@ -341,29 +347,43 @@ def plot_hist(
         [hist_diphoton, hist_samples_diphoton],
         stack=False,
         histtype="step",
-        label=["MC_Diphoton", "MC_corrected"],
+        label=["MC uncorrected", "MC corrected"],
         ax=axs[0],
     )
 
     axs[0].set_xlabel(var)
     axs[0].set_ylabel("Frequency")
-    axs[0].legend()
+    axs[0].legend(
+        title="Diphoton",
+        frameon=True,
+        fancybox=True,
+        edgecolor="black",
+        facecolor="white",
+        framealpha=1,
+    )
     hep.cms.label("Work in Progress", data=False, ax=axs[0])
 
     hep.histplot(
         [hist_g_jet, hist_samples_gjet],
         stack=False,
         histtype="step",
-        label=["MC_GJet", "MC_corrected"],
+        label=["MC uncorrected", "MC corrected"],
         ax=axs[1],
     )
 
     axs[1].set_xlabel(var)
     axs[1].set_ylabel("Frequency")
-    axs[1].legend()
+    axs[1].legend(
+        title="GJet",
+        frameon=True,
+        fancybox=True,
+        edgecolor="black",
+        facecolor="white",
+        framealpha=1,
+    )
     axs[0].text(
-        0.05,
-        0.95,
+        0.03,
+        0.93,
         title,
         transform=axs[0].transAxes,
         fontsize=14,
@@ -381,20 +401,22 @@ def plot_hist(
 
 
 def comparison_mvaID(
-    df, var1="photon_corr_mvaID_run3", var2="min_mvaID", title="Comparison MVAID"
+    df,
+    var1="photon_corr_mvaID_run3",
+    var2="lead_mvaID",
+    title="Comparison MVAID",
+    data_name="",
 ):
     plt.clf()
-    fig, ax = plt.subplots(figsize=(10, 5))
+    fig, ax = plt.subplots(figsize=(10, 8))
     plt.style.use(hep.style.CMS)
 
     # Calculate the mean and standard deviation of the data
-    mean = np.mean(np.concatenate([df[var1], df[var2]]))
-    std = np.std(np.concatenate([df[var1], df[var2]]))
+    mean = 0
 
-    num_bins = 50
-    min_value = mean - 3 * std
-    max_value = mean + 3 * std
-
+    num_bins = 35
+    min_value = mean - 1
+    max_value = mean + 1
     bin_width = (max_value - min_value) / num_bins
 
     # Create the histograms
@@ -414,33 +436,42 @@ def comparison_mvaID(
     hist_var2 = hist_var2 / (hist_var2.values().sum() * bin_width)
 
     hep.histplot(
-        [hist_var1, hist_var2],
+        hist_var1,
         stack=False,
         histtype="step",
-        label=[var1, var2],
+        label="corr_mvaID",
         ax=ax,
+        linestyle="-",  # solid line
+    )
+
+    hep.histplot(
+        hist_var2,
+        stack=False,
+        histtype="step",
+        label="uncorr_mvaID",
+        ax=ax,
+        linestyle="--",  # dashed line
     )
 
     ax.set_xlabel("Value")
     ax.set_ylabel("Frequency")
     ax.set_xlim(-1.1, 1.1)
-    ax.legend()
-    hep.cms.label("Work in Progress", data=False, ax=ax)
-
-    ax.text(
-        0.05,
-        0.95,
-        title,
-        transform=ax.transAxes,
-        fontsize=14,
-        verticalalignment="top",
-        bbox=dict(boxstyle="round", facecolor="white", alpha=0.5),
+    ax.legend(
+        title=title,
+        frameon=True,
+        fancybox=True,
+        edgecolor="black",
+        facecolor="white",
+        framealpha=1,
+        loc="best",
     )
+    hep.cms.label("Work in Progress", data=False, ax=ax)
 
     plt.tight_layout()
     plt.savefig(
-        f"/home/home1/institut_3a/jaensch/Documents/BA/BA/Diphoton/"
-        + f"/_direct_compare_hist_{var1}_{var2}.png"
+        f"/home/home1/institut_3a/jaensch/Documents/BA/BA/Diphoton/mva_id_corr/"
+        + data_name
+        + f"_direct_compare_hist_{var1}_{var2}.png"
     )
     plt.show()
 
@@ -527,25 +558,46 @@ def add_corr_photonid_mva_run3_zmmg(photons: awkward.Array, process) -> awkward.
     # Now mvaID for the corrected variables
 
     inputs_EB = [
-        "r9",
-        "etaWidth",
-        "phiWidth",
-        "s4",
-        "ScEta",
+        "lead_energyRaw",
+        "lead_r9",
+        "lead_sieie",
+        "lead_etaWidth",
+        "lead_phiWidth",
+        "lead_sieip",
+        "lead_s4",
+        "lead_hoe",
+        "lead_ecalPFClusterIso",
+        "lead_trkSumPtHollowConeDR03",
+        "lead_trkSumPtSolidConeDR04",
+        "lead_pfChargedIso",
+        "lead_pfChargedIsoWorstVtx",
+        "lead_ScEta",
         "fixedGridRhoAll",
     ]
 
     inputs_EE = [
-        "r9",
-        "etaWidth",
-        "phiWidth",
-        "s4",
-        "ScEta",
+        "lead_energyRaw",
+        "lead_r9",
+        "lead_sieie",
+        "lead_etaWidth",
+        "lead_phiWidth",
+        "lead_sieip",
+        "lead_s4",
+        "lead_hoe",
+        "lead_ecalPFClusterIso",
+        "lead_hcalPFClusterIso",
+        "lead_trkSumPtHollowConeDR03",
+        "lead_trkSumPtSolidConeDR04",
+        "lead_pfChargedIso",
+        "lead_pfChargedIsoWorstVtx",
+        "lead_ScEta",
         "fixedGridRhoAll",
+        "lead_esEffSigmaRR",
+        "lead_esEnergyOverRawE",
     ]
 
     # Now calculating the corrected mvaID
-    isEB = awkward.to_numpy(np.abs(np.array(photons["ScEta"])) < 1.5)
+    isEB = awkward.to_numpy(np.abs(np.array(photons["lead_ScEta"])) < 1.5)
 
     corr_mva_EB = calculate_photonid_mva_run3([photonid_mva_EB, inputs_EB], photons)
 
