@@ -108,25 +108,30 @@ def apply_flow(
 
 # Stacked comparison of the histograms with data points
 def plot_hist_subplots(
-    df_diphoton,
-    df_g_jet,
+    diphoton_all_info,
+    gjet_all_info,
     df_data,
-    samples_diphoton,
-    samples_gjet,
     var,
-    test_weights_diphoton,
-    test_weights_gjet,
-    i,
     title,
+    var_uncorr="",
 ):
     plt.clf()
-
+    if var_uncorr == "":
+        var_uncorr = var[:-8]
     fig, axs = plt.subplots(3, 1, figsize=(10, 15), sharex=True)
     plt.style.use(hep.style.CMS)
 
     # Calculate the mean and standard deviation of the data
-    mean = np.mean(np.concatenate([df_diphoton[var], df_g_jet[var], df_data[var]]))
-    std = np.std(np.concatenate([df_diphoton[var], df_g_jet[var], df_data[var]]))
+    mean = np.mean(
+        np.concatenate(
+            [diphoton_all_info[var], gjet_all_info[var], df_data[var_uncorr]]
+        )
+    )
+    std = np.std(
+        np.concatenate(
+            [diphoton_all_info[var], gjet_all_info[var], df_data[var_uncorr]]
+        )
+    )
 
     num_bins = 35
     min_value = mean - 3 * std
@@ -137,13 +142,13 @@ def plot_hist_subplots(
     hist_diphoton = (
         hist.Hist.new.Reg(num_bins, min_value, max_value)
         .Weight()
-        .fill(df_diphoton[var], weight=df_diphoton["weight"])
+        .fill(diphoton_all_info[var_uncorr], weight=diphoton_all_info["weight"])
     )
 
     hist_g_jet = (
         hist.Hist.new.Reg(num_bins, min_value, max_value)
         .Weight()
-        .fill(df_g_jet[var], weight=df_g_jet["weight"])
+        .fill(gjet_all_info[var_uncorr], weight=gjet_all_info["weight"])
     )
     sum_data = hist_diphoton.values().sum() + hist_g_jet.values().sum()
     hist_diphoton = hist_diphoton / (sum_data * bin_width)
@@ -161,7 +166,7 @@ def plot_hist_subplots(
     hist_data = (
         hist.Hist.new.Reg(num_bins, min_value, max_value)
         .Weight()
-        .fill(df_data[var], weight=df_data["weight"])
+        .fill(df_data[var_uncorr], weight=df_data["weight"])
     )
     hist_data = hist_data / (hist_data.values().sum() * bin_width)
     print((hist_data.values() * bin_width).sum())
@@ -188,16 +193,14 @@ def plot_hist_subplots(
         hist.Hist.new.Reg(num_bins, min_value, max_value)
         .Weight()
         .fill(
-            samples_diphoton[:, i].numpy(),
-            weight=test_weights_diphoton.numpy(),
-        )  # Flatten the array
+            diphoton_all_info[var],
+            weight=diphoton_all_info["weight"],
+        )
     )
     hist_samples_gjet = (
         hist.Hist.new.Reg(num_bins, min_value, max_value)
         .Weight()
-        .fill(
-            samples_gjet[:, i].numpy(), weight=test_weights_gjet.numpy()
-        )  # Flatten the array
+        .fill(gjet_all_info[var], weight=gjet_all_info["weight"])
     )
 
     # Normalize the histograms
@@ -272,7 +275,7 @@ def plot_hist_subplots(
 
     plt.tight_layout()
     plt.savefig(
-        f"/home/home1/institut_3a/jaensch/Documents/BA/BA/Diphoton/"
+        "/home/home1/institut_3a/jaensch/Documents/BA/BA/Diphoton/"
         + title
         + f"/_sample_compare_hist_{var}.png"
     )
@@ -281,25 +284,30 @@ def plot_hist_subplots(
 
 # Direct Comparison of diphoton and g_jet histograms with the corrected samples
 def plot_hist(
-    df_diphoton,
-    df_g_jet,
+    diphoton_all_info,
+    gjet_all_info,
     df_data,
-    samples_diphoton,
-    samples_gjet,
     var,
-    test_weights_diphoton,
-    test_weights_gjet,
-    i,
     title,
+    var_uncorr="",
 ):
     plt.clf()
+    if var_uncorr == "":
+        var_uncorr = var[:-8]
     fig, axs = plt.subplots(2, 1, figsize=(10, 10), sharex=True)
     plt.style.use(hep.style.CMS)
 
     # Calculate the mean and standard deviation of the data
-    mean = np.mean(np.concatenate([df_diphoton[var], df_g_jet[var], df_data[var]]))
-    std = np.std(np.concatenate([df_diphoton[var], df_g_jet[var], df_data[var]]))
-
+    mean = np.mean(
+        np.concatenate(
+            [diphoton_all_info[var], gjet_all_info[var], df_data[var_uncorr]]
+        )
+    )
+    std = np.std(
+        np.concatenate(
+            [diphoton_all_info[var], gjet_all_info[var], df_data[var_uncorr]]
+        )
+    )
     num_bins = 50
     min_value = mean - 3 * std
     max_value = mean + 3 * std
@@ -310,28 +318,24 @@ def plot_hist(
     hist_diphoton = (
         hist.Hist.new.Reg(num_bins, min_value, max_value)
         .Weight()
-        .fill(df_diphoton[var], weight=df_diphoton["weight"])
+        .fill(diphoton_all_info[var_uncorr], weight=diphoton_all_info["weight"])
     )
 
     hist_g_jet = (
         hist.Hist.new.Reg(num_bins, min_value, max_value)
         .Weight()
-        .fill(df_g_jet[var], weight=df_g_jet["weight"])
+        .fill(gjet_all_info[var_uncorr], weight=gjet_all_info["weight"])
     )
 
     hist_samples_diphoton = (
         hist.Hist.new.Reg(num_bins, min_value, max_value)
         .Weight()
-        .fill(
-            samples_diphoton[:, i].numpy(), weight=test_weights_diphoton.numpy()
-        )  # Flatten the array
+        .fill(diphoton_all_info[var], weight=diphoton_all_info["weight"])
     )
     hist_samples_gjet = (
         hist.Hist.new.Reg(num_bins, min_value, max_value)
         .Weight()
-        .fill(
-            samples_gjet[:, i].numpy(), weight=test_weights_gjet.numpy()
-        )  # Flatten the array
+        .fill(gjet_all_info[var], weight=gjet_all_info["weight"])
     )
 
     hist_samples_diphoton = hist_samples_diphoton / (
@@ -393,7 +397,7 @@ def plot_hist(
 
     plt.tight_layout()
     plt.savefig(
-        f"/home/home1/institut_3a/jaensch/Documents/BA/BA/Diphoton/"
+        "/home/home1/institut_3a/jaensch/Documents/BA/BA/Diphoton/"
         + title
         + f"/_direct_compare_hist_{var}.png"
     )
@@ -423,13 +427,13 @@ def comparison_mvaID(
     hist_var1 = (
         hist.Hist.new.Reg(num_bins, min_value, max_value)
         .Weight()
-        .fill(df[var1], weight=df["weights"])
+        .fill(df[var1], weight=df["weight"])
     )
 
     hist_var2 = (
         hist.Hist.new.Reg(num_bins, min_value, max_value)
         .Weight()
-        .fill(df[var2], weight=df["weights"])
+        .fill(df[var2], weight=df["weight"])
     )
 
     hist_var1 = hist_var1 / (hist_var1.values().sum() * bin_width)
@@ -469,7 +473,7 @@ def comparison_mvaID(
 
     plt.tight_layout()
     plt.savefig(
-        f"/home/home1/institut_3a/jaensch/Documents/BA/BA/Diphoton/mva_id_corr/"
+        "/home/home1/institut_3a/jaensch/Documents/BA/BA/Diphoton/mva_id_corr/"
         + data_name
         + f"_direct_compare_hist_{var1}_{var2}.png"
     )
@@ -550,58 +554,157 @@ def calculate_photonid_mva_run3(
     return mvaID
 
 
-def add_corr_photonid_mva_run3_zmmg(photons: awkward.Array, process) -> awkward.Array:
+def add_corr_photonid_mva_run3_of(photons: awkward.Array) -> awkward.Array:
 
-    preliminary_path = "./run3_mvaID/"
+    preliminary_path = (
+        "/home/home1/institut_3a/jaensch/Documents/BA/BA/Diphoton/run3_mvaID/"
+    )
     photonid_mva_EB, photonid_mva_EE = load_photonid_mva_run3(preliminary_path)
 
     # Now mvaID for the corrected variables
 
     inputs_EB = [
-        "lead_energyRaw",
-        "lead_r9",
-        "lead_sieie",
-        "lead_etaWidth",
-        "lead_phiWidth",
-        "lead_sieip",
-        "lead_s4",
-        "lead_hoe",
-        "lead_ecalPFClusterIso",
-        "lead_trkSumPtHollowConeDR03",
-        "lead_trkSumPtSolidConeDR04",
-        "lead_pfChargedIso",
-        "lead_pfChargedIsoWorstVtx",
-        "lead_ScEta",
+        "energyRaw",
+        "r9_corr_of",
+        "sieie",
+        "etaWidth_corr_of",
+        "phiWidth_corr_of",
+        "sieip",
+        "s4_corr_of",
+        "hoe",
+        "ecalPFClusterIso",
+        "trkSumPtHollowConeDR03",
+        "trkSumPtSolidConeDR04",
+        "pfChargedIso",
+        "pfChargedIsoWorstVtx",
+        "ScEta",
         "fixedGridRhoAll",
     ]
 
     inputs_EE = [
-        "lead_energyRaw",
-        "lead_r9",
-        "lead_sieie",
-        "lead_etaWidth",
-        "lead_phiWidth",
-        "lead_sieip",
-        "lead_s4",
-        "lead_hoe",
-        "lead_ecalPFClusterIso",
-        "lead_hcalPFClusterIso",
-        "lead_trkSumPtHollowConeDR03",
-        "lead_trkSumPtSolidConeDR04",
-        "lead_pfChargedIso",
-        "lead_pfChargedIsoWorstVtx",
-        "lead_ScEta",
+        "energyRaw",
+        "r9_corr_of",
+        "sieie",
+        "etaWidth_corr_of",
+        "phiWidth_corr_of",
+        "sieip",
+        "s4_corr_of",
+        "hoe",
+        "ecalPFClusterIso",
+        "hcalPFClusterIso",
+        "trkSumPtHollowConeDR03",
+        "trkSumPtSolidConeDR04",
+        "pfChargedIso",
+        "pfChargedIsoWorstVtx",
+        "ScEta",
         "fixedGridRhoAll",
-        "lead_esEffSigmaRR",
-        "lead_esEnergyOverRawE",
+        "esEffSigmaRR",
+        "esEnergyOverRawE",
     ]
 
-    # Now calculating the corrected mvaID
-    isEB = awkward.to_numpy(np.abs(np.array(photons["lead_ScEta"])) < 1.5)
+    photon_types = ["lead"]
+    corrected_mva_id = []
 
-    corr_mva_EB = calculate_photonid_mva_run3([photonid_mva_EB, inputs_EB], photons)
+    for photon_type in photon_types:
 
-    corr_mva_EE = calculate_photonid_mva_run3([photonid_mva_EE, inputs_EE], photons)
-    corrected_mva_id = awkward.where(isEB, corr_mva_EB, corr_mva_EE)
+        # Now calculating the corrected mvaID
+        isEB = awkward.to_numpy(np.abs(np.array(photons[photon_type + "_ScEta"])) < 1.5)
 
-    return corrected_mva_id
+        inputs_EB_corr = [
+            photon_type + "_" + s if "fixedGridRhoAll" not in s else s
+            for s in inputs_EB
+        ]
+
+        corr_mva_EB = calculate_photonid_mva_run3(
+            [photonid_mva_EB, inputs_EB_corr], photons
+        )
+
+        inputs_EE_corr = [
+            photon_type + "_" + s if "fixedGridRhoAll" not in s else s
+            for s in inputs_EE
+        ]
+
+        corr_mva_EE = calculate_photonid_mva_run3(
+            [photonid_mva_EE, inputs_EE_corr], photons
+        )
+        corrected_mva_id.append(awkward.where(isEB, corr_mva_EB, corr_mva_EE))
+
+    return corrected_mva_id[0]
+
+
+def add_corr_photonid_mva_run3_data(photons: awkward.Array) -> awkward.Array:
+
+    preliminary_path = (
+        "/home/home1/institut_3a/jaensch/Documents/BA/BA/Diphoton/run3_mvaID/"
+    )
+    photonid_mva_EB, photonid_mva_EE = load_photonid_mva_run3(preliminary_path)
+
+    # Now mvaID for the corrected variables
+
+    inputs_EB = [
+        "energyRaw",
+        "r9",
+        "sieie",
+        "etaWidth",
+        "phiWidth",
+        "sieip",
+        "s4",
+        "hoe",
+        "ecalPFClusterIso",
+        "trkSumPtHollowConeDR03",
+        "trkSumPtSolidConeDR04",
+        "pfChargedIso",
+        "pfChargedIsoWorstVtx",
+        "ScEta",
+        "fixedGridRhoAll",
+    ]
+
+    inputs_EE = [
+        "energyRaw",
+        "r9",
+        "sieie",
+        "etaWidth",
+        "phiWidth",
+        "sieip",
+        "s4",
+        "hoe",
+        "ecalPFClusterIso",
+        "hcalPFClusterIso",
+        "trkSumPtHollowConeDR03",
+        "trkSumPtSolidConeDR04",
+        "pfChargedIso",
+        "pfChargedIsoWorstVtx",
+        "ScEta",
+        "fixedGridRhoAll",
+        "esEffSigmaRR",
+        "esEnergyOverRawE",
+    ]
+
+    photon_types = ["lead"]
+    corrected_mva_id = []
+
+    for photon_type in photon_types:
+
+        # Now calculating the corrected mvaID
+        isEB = awkward.to_numpy(np.abs(np.array(photons[photon_type + "_ScEta"])) < 1.5)
+
+        inputs_EB_corr = [
+            photon_type + "_" + s if "fixedGridRhoAll" not in s else s
+            for s in inputs_EB
+        ]
+
+        corr_mva_EB = calculate_photonid_mva_run3(
+            [photonid_mva_EB, inputs_EB_corr], photons
+        )
+
+        inputs_EE_corr = [
+            photon_type + "_" + s if "fixedGridRhoAll" not in s else s
+            for s in inputs_EE
+        ]
+
+        corr_mva_EE = calculate_photonid_mva_run3(
+            [photonid_mva_EE, inputs_EE_corr], photons
+        )
+        corrected_mva_id.append(awkward.where(isEB, corr_mva_EB, corr_mva_EE))
+
+    return corrected_mva_id[0]

@@ -40,7 +40,7 @@ conditions_list = ["pt", "ScEta", "phi", "fixedGridRhoAll", "mass"]
 
 plot_list = ["lead_" + s for s in var_list]
 plot_list.append("mass")
-plot_list.append("pt")
+plot_list.append("lead_pt")
 
 input_list_lead = ["lead_" + s for s in var_list]
 n_input = len(
@@ -442,6 +442,8 @@ print("Start training")
 save_dir = path + "results/saved_states"
 os.makedirs(save_dir, exist_ok=True)
 for epoch in range(999):
+    epoch_loss = 0.0
+    epoch_validation_loss = 0.0
     for batch in range(250):
 
         optimizer.zero_grad()
@@ -459,56 +461,65 @@ for epoch in range(999):
 
         optimizer.step()
 
+        epoch_loss += loss.item()
+
+        # Validation loss for each batch
+        with torch.no_grad():
+            idxs = torch.randint(
+                low=0, high=validation_inputs.size()[0], size=(batch_size,)
+            )
+
+            validation_loss = validation_weights[idxs].to(device) * (
+                -flow(validation_conditions[idxs]).log_prob(validation_inputs[idxs])
+            )
+            validation_loss = validation_loss.mean()
+
+            epoch_validation_loss += validation_loss.item()
+
+    epoch_loss /= 250  # average training loss for the epoch
+    epoch_validation_loss /= 250  # average validation loss for the epoch
+
     torch.save(
         flow.state_dict(),
         save_dir + "/epoch_" + str(epoch) + ".pth",
     )
-    with torch.no_grad():
-        idxs = torch.randint(
-            low=0, high=validation_inputs.size()[0], size=(batch_size,)
-        )
 
-        validation_loss = validation_weights[idxs].to(device) * (
-            -flow(validation_conditions[idxs]).log_prob(validation_inputs[idxs])
-        )
-        validation_loss = validation_loss.mean()
+    training_loss_array.append(float(1e6 * epoch_loss))
+    validation_loss_array.append(float(1e6 * epoch_validation_loss))
 
-        training_loss_array.append(float(1e6 * loss))
-        validation_loss_array.append(float(1e6 * validation_loss))
+    scheduler.step(epoch_validation_loss)
 
-        scheduler.step(validation_loss)
+    print(
+        "Epoch: ",
+        epoch,
+        " Training loss: ",
+        float(1e6 * epoch_loss),
+        " Validation loss: ",
+        float(1e6 * epoch_validation_loss),
+    )
+
+    # TODO: Early stopping and save the model
+    if epoch > max_epoch_number:
 
         print(
-            "Epoch: ",
-            epoch,
-            " Training loss: ",
-            float(1e6 * loss),
-            " Validation loss: ",
-            float(1e6 * validation_loss),
+            "Best epoch loss: ",
+            np.min(np.array(validation_loss_array)),
+            " at epoch: ",
+            np.argmin(np.array(np.array(validation_loss_array))),
         )
 
-        # TODO: Early stopping and save the model
-        if epoch > max_epoch_number:
-
-            print(
-                "Best epoch loss: ",
-                np.min(np.array(validation_loss_array)),
-                " at epoch: ",
-                np.argmin(np.array(np.array(validation_loss_array))),
+        # Lets select the model with the best validation loss
+        flow.load_state_dict(
+            torch.load(
+                save_dir
+                + "/epoch_"
+                + str(np.argmin(np.array(np.array(validation_loss_array))))
+                + ".pth"
             )
+        )
+        torch.save(flow.state_dict(), save_dir + "/best_model_.pth")
 
-            # Lets select the model with the best validation loss
-            flow.load_state_dict(
-                torch.load(
-                    save_dir
-                    + "/epoch_"
-                    + str(np.argmin(np.array(np.array(validation_loss_array))))
-                    + ".pth"
-                )
-            )
-            torch.save(flow.state_dict(), save_dir + "/best_model_.pth")
-
-            break
+        break
 
 # plot the training and validation loss
 utlis.plot_loss_cruve(

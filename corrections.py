@@ -33,23 +33,23 @@ def load_data(path):
     return test_inputs, test_conditions, test_meta_data, test_weights
 
 
-def split_data(test_inputs, test_conditions, test_meta_data, test_weights):
-    test_inputs_diphoton = test_inputs[test_meta_data[:, -1] == 1]
-    test_conditions_diphoton = test_conditions[test_meta_data[:, -1] == 1]
-    test_meta_data_diphoton = test_meta_data[test_meta_data[:, -1] == 1]
-    test_weights_diphoton = test_weights[test_meta_data[:, -1] == 1]
+def split_data(test_inputs, test_conditions, all_info_test, test_weights):
+    test_inputs_diphoton = test_inputs[all_info_test["origin"] == 1]
+    test_conditions_diphoton = test_conditions[all_info_test["origin"] == 1]
+    all_info_test_diphoton = all_info_test[all_info_test["origin"] == 1]
+    test_weights_diphoton = test_weights[all_info_test["origin"] == 1]
 
-    test_inputs_gjet = test_inputs[test_meta_data[:, -1] == 0]
-    test_conditions_gjet = test_conditions[test_meta_data[:, -1] == 0]
-    test_meta_data_gjet = test_meta_data[test_meta_data[:, -1] == 0]
-    test_weights_gjet = test_weights[test_meta_data[:, -1] == 0]
+    test_inputs_gjet = test_inputs[all_info_test["origin"] == 0]
+    test_conditions_gjet = test_conditions[all_info_test["origin"] == 0]
+    all_info_test_gjet = all_info_test[all_info_test["origin"] == 0]
+    test_weights_gjet = test_weights[all_info_test["origin"] == 0]
 
     return (
         test_inputs_diphoton,
         test_conditions_diphoton,
-        test_meta_data_diphoton,
+        all_info_test_diphoton,
         test_weights_diphoton,
-    ), (test_inputs_gjet, test_conditions_gjet, test_meta_data_gjet, test_weights_gjet)
+    ), (test_inputs_gjet, test_conditions_gjet, all_info_test_gjet, test_weights_gjet)
 
 
 def load_model(path):
@@ -119,16 +119,17 @@ def load_parquet_files(path_df):
 path = "/home/home1/institut_3a/jaensch/Documents/BA/BA/Diphoton/"
 path_df = "/net/scratch_cms3a/daumann/normalizing_flows_project/script_to_prepare_samples_for_paper/splited_parquet/Diphoton_samples/"
 
+all_info_test = pd.read_csv(path + "all_info_test.csv")
 # Load the data
 test_inputs, test_conditions, test_meta_data, test_weights = load_data(path)
 
 # Split the data
-(diphoton_inputs, diphoton_conditions, diphoton_meta_data, diphoton_weights), (
+(diphoton_inputs, diphoton_conditions, diphoton_all_info, diphoton_weights), (
     gjet_inputs,
     gjet_conditions,
-    gjet_meta_data,
+    gjet_all_info,
     gjet_weights,
-) = split_data(test_inputs, test_conditions, test_meta_data, test_weights)
+) = split_data(test_inputs, test_conditions, all_info_test, test_weights)
 
 # Load the model and dictionary
 model, dictionary = load_model(path)
@@ -147,14 +148,6 @@ samples_gjet = apply_flow_and_invert_standardization(
 # Load parquet files
 df_data, df_Diphoton, df_GJEt = load_parquet_files(path_df)
 
-all_info_test = pd.read_csv("all_info_test.csv")
-
-all_info_diphoton = all_info_test[all_info_test["origin"] == 1]
-all_info_gjet = all_info_test[all_info_test["origin"] == 0]
-
-all_info_diphoton.columns = all_info_diphoton.columns.str.replace("weight", "weights")
-all_info_gjet.columns = all_info_gjet.columns.str.replace("weight", "weights")
-
 
 var_list = [
     "r9",
@@ -162,291 +155,86 @@ var_list = [
     "phiWidth",
     "s4",
 ]
-var_list = ["lead_" + s for s in var_list]
+var_list = ["lead_" + s + "_corr_of" for s in var_list]
+
 
 df_samples_diphoton = pd.DataFrame(samples_diphoton, columns=var_list)
 df_samples_gjet = pd.DataFrame(samples_gjet, columns=var_list)
 
-# Replace the columns with my correction
-for var in var_list:
-    if var in df_samples_diphoton.columns and var in all_info_diphoton.columns:
-        all_info_diphoton[var] = df_samples_diphoton[var]
 
-for var in var_list:
-    if var in df_samples_gjet.columns and var in all_info_gjet.columns:
-        all_info_gjet[var] = df_samples_gjet[var]
-
-conditions_list = ["pt", "ScEta", "phi", "fixedGridRhoAll", "mass", "is_data"]
-conditions_list = ["lead_" + s for s in conditions_list[:-3]]
-conditions_list.append("fixedGridRhoAll")
-conditions_list.append("mass")
-conditions_list.append("is_data")
-
-meta_list = [
-    "energyRaw",
-    "sieie",
-    "sieip",
-    "hoe",
-    "ecalPFClusterIso",
-    "hcalPFClusterIso",
-    "trkSumPtHollowConeDR03",
-    "trkSumPtSolidConeDR04",
-    "pfChargedIso",
-    "pfChargedIsoWorstVtx",
-    "esEffSigmaRR",
-    "esEnergyOverRawE",
-    "mvaID",
-    "mass",
-    "origin",
-    "weight",
-]
-
-meta_data_list = ["lead_" + s for s in meta_list[:-3]] + meta_list[-3:-1]
-
-# %% MVAID correction
-
-"""
-def concat_dataframes(
-    samples, conditions, meta_data, weights, var_list, conditions_list, meta_data_list
-):
-    # Convert the samples, conditions, and meta data to pandas DataFrame
-    df_samples = pd.DataFrame(samples, columns=var_list)
-    df_conditions = pd.DataFrame(conditions, columns=conditions_list)
-    df_meta_data = pd.DataFrame(meta_data, columns=meta_data_list)
-    df_weights = pd.DataFrame(weights, columns=["weights"])
-
-    # Concatenate the samples, conditions, and meta data DataFrames
-    df_samples_corr = pd.concat(
-        [df_samples, df_conditions, df_meta_data, df_weights], axis=1
-    )
-
-    return df_samples_corr
-"""
+diphoton_all_info_reset = diphoton_all_info.reset_index(drop=True)
+gjet_all_info_reset = gjet_all_info.reset_index(drop=True)
+df_samples_diphoton_reset = df_samples_diphoton.reset_index(drop=True)
+df_samples_gjet_reset = df_samples_gjet.reset_index(drop=True)
+diphoton_all_info = pd.concat(
+    [diphoton_all_info_reset, df_samples_diphoton_reset], axis=1
+)
+gjet_all_info = pd.concat([gjet_all_info_reset, df_samples_gjet_reset], axis=1)
 
 
-def add_corr_mvaid(df_samples_corr, process, data_name):
+def add_corr_mvaid(df_samples_corr, title, data_name, corr=True):
+
     # Add corrected photon id mva
-    corr_mvaID = utlis.add_corr_photonid_mva_run3_zmmg(df_samples_corr, process)
-    df_samples_corr["photon_corr_mvaID_run3"] = corr_mvaID
+    if corr == True:
+        corr_mvaID = utlis.add_corr_photonid_mva_run3_of(df_samples_corr)
+        df_samples_corr["photon_corr_mvaID_run3"] = corr_mvaID
+    else:
+        corr_mvaID = utlis.add_corr_photonid_mva_run3_data(df_samples_corr)
+        df_samples_corr["photon_corr_mvaID_run3"] = corr_mvaID
 
-    utlis.comparison_mvaID(df_samples_corr, title=process, data_name=data_name)
+    utlis.comparison_mvaID(df_samples_corr, title=title, data_name=data_name)
 
     return df_samples_corr
 
 
-"""
-# Concatenate the dataframes for diphoton
-df_samples_diphoton = concat_dataframes(
-    samples_diphoton,
-    diphoton_conditions,
-    diphoton_meta_data,
-    diphoton_weights,
-    var_list,
-    conditions_list,
-    meta_data_list,
-)
-"""
+add_corr_mvaid(diphoton_all_info, title="Diphoton", data_name="di_sap")
+add_corr_mvaid(gjet_all_info, title="GJet", data_name="gjet_sap")
+add_corr_mvaid(df_data, title="Data", data_name="data", corr=False)
 
-# Add the corrected photon id mva for diphoton
-all_info_diphoton = add_corr_mvaid(
-    all_info_diphoton, "MC_Diphoton_corr", data_name="di_sap"
-)
-"""
-# Concatenate the dataframes for gjet
-df_samples_gjet = concat_dataframes(
-    samples_gjet,
-    gjet_conditions,
-    gjet_meta_data,
-    gjet_weights,
-    var_list,
-    conditions_list,
-    meta_data_list,
-)
-"""
-# Add the corrected photon id mva for gjet
-all_info_gjet = add_corr_mvaid(all_info_gjet, "MC_GJet_corr", data_name="gj_sap")
 
-df_Diphoton_vgl = df_Diphoton.copy()
-df_Diphoton_vgl.columns = df_Diphoton_vgl.columns.str.replace("weight", "weights")
-df_Diphoton_vgl = add_corr_mvaid(
-    df_Diphoton_vgl, "MC_Diphoton_uncorr", data_name="di_vgl"
+utlis.plot_hist_subplots(
+    diphoton_all_info,
+    gjet_all_info,
+    df_data,
+    var="photon_corr_mvaID_run3",
+    title="No Mask",
+    var_uncorr="lead_mvaID",
 )
 
-df_GJEt_vgl = df_GJEt.copy()
-df_GJEt_vgl.columns = df_GJEt_vgl.columns.str.replace("weight", "weights")
-df_GJEt_vgl = add_corr_mvaid(df_GJEt_vgl, "MC_GJet_uncorr", data_name="gj_vgl")
-
-df_data_vgl = df_data.copy()
-df_data_vgl.columns = df_data_vgl.columns.str.replace("weight", "weights")
-df_data_vgl = add_corr_mvaid(df_data_vgl, "Data", data_name="data_vgl")
-
-
-# %% Data vs MC comparison (corr and uncorr)
+# %%
 
 
 def analysis_generel(
-    df_Diphoton,
-    df_GJEt,
+    diphoton_all_info,
+    gjet_all_info,
     df_data,
-    samples_diphoton,
-    samples_gjet,
-    test_weights_diphoton,
-    test_weights_gjet,
 ):
-    i = 0
     for var in var_list:
 
         utlis.plot_hist_subplots(
-            df_Diphoton,
-            df_GJEt,
+            diphoton_all_info,
+            gjet_all_info,
             df_data,
-            samples_diphoton,
-            samples_gjet,
             var,
-            test_weights_diphoton,
-            test_weights_gjet,
-            i,
             "No Mask",
         )
-        i += 1
 
-    i = 0
     for var in var_list:
 
         utlis.plot_hist(
-            df_Diphoton,
-            df_GJEt,
+            diphoton_all_info,
+            gjet_all_info,
             df_data,
-            samples_diphoton,
-            samples_gjet,
             var,
-            test_weights_diphoton,
-            test_weights_gjet,
-            i,
             "No Mask",
         )
-        i += 1
 
 
 analysis_generel(
-    df_Diphoton,
-    df_GJEt,
+    diphoton_all_info,
+    gjet_all_info,
     df_data,
-    samples_diphoton,
-    samples_gjet,
-    diphoton_weights,
-    gjet_weights,
 )
 
-
-# %%
-# analysis with m between 150-180 and min mvid > 0.25
-def analysis_m_cut(
-    df_Diphoton,
-    df_GJEt,
-    df_data,
-    test_meta_data_diphoton,
-    test_meta_data_gjet,
-    test_inputs_diphoton,
-    test_conditions_diphoton,
-    test_weights_diphoton,
-    test_inputs_gjet,
-    test_conditions_gjet,
-    test_weights_gjet,
-    m_low,
-    m_high,
-    mva_ID_cut,
-):
-
-    mask_diphoton = (
-        (test_meta_data_diphoton[:, 0] > mva_ID_cut)
-        & (test_meta_data_diphoton[:, 1] > m_low)
-        & (test_meta_data_diphoton[:, 1] < m_high)
-    )
-    mask_gjet = (
-        (test_meta_data_gjet[:, 0] > mva_ID_cut)
-        & (test_meta_data_gjet[:, 1] > m_low)
-        & (test_meta_data_gjet[:, 1] < m_high)
-    )
-
-    def apply_mask(df):
-        mask = (
-            (df["min_mvaID"] > mva_ID_cut)
-            & (df["mass"] > m_low)
-            & (df["mass"] < m_high)
-        )
-        return df[mask]
-
-    df_Diphoton = apply_mask(df_Diphoton)
-    df_GJEt = apply_mask(df_GJEt)
-    df_data = apply_mask(df_data)
-
-    test_inputs_diphoton = test_inputs_diphoton[mask_diphoton]
-    test_conditions_diphoton = test_conditions_diphoton[mask_diphoton]
-    test_weights_diphoton = test_weights_diphoton[mask_diphoton]
-
-    test_inputs_gjet = test_inputs_gjet[mask_gjet]
-    test_conditions_gjet = test_conditions_gjet[mask_gjet]
-    test_weights_gjet = test_weights_gjet[mask_gjet]
-
-    samples_diphoton = utlis.apply_flow(
-        test_inputs_diphoton, test_conditions_diphoton, flow
-    )
-    samples_gjet = utlis.apply_flow(test_inputs_gjet, test_conditions_gjet, flow)
-
-    samples_diphoton = utlis.invert_standardization(samples_diphoton, path)
-    samples_gjet = utlis.invert_standardization(samples_gjet, path)
-
-    i = 0
-    for var in var_list:
-
-        utlis.plot_hist_subplots(
-            df_Diphoton,
-            df_GJEt,
-            df_data,
-            samples_diphoton,
-            samples_gjet,
-            var,
-            test_weights_diphoton,
-            test_weights_gjet,
-            i,
-            "Mask m and mvaID",
-        )
-        i += 1
-
-    i = 0
-    for var in var_list:
-
-        utlis.plot_hist(
-            df_Diphoton,
-            df_GJEt,
-            df_data,
-            samples_diphoton,
-            samples_gjet,
-            var,
-            test_weights_diphoton,
-            test_weights_gjet,
-            i,
-            "Mask m and mvaID",
-        )
-        i += 1
-
-
-analysis_m_cut(
-    df_Diphoton,
-    df_GJEt,
-    df_data,
-    diphoton_meta_data,
-    gjet_meta_data,
-    diphoton_inputs,
-    diphoton_conditions,
-    diphoton_weights,
-    gjet_inputs,
-    gjet_conditions,
-    gjet_weights,
-    m_low=0,
-    m_high=180,
-    mva_ID_cut=0.25,
-)
 
 # %%
