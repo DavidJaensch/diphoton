@@ -154,6 +154,8 @@ var_list = [
     "etaWidth",
     "phiWidth",
     "s4",
+    "sieie",
+    "sieip",
 ]
 var_list = ["lead_" + s + "_corr_of" for s in var_list]
 

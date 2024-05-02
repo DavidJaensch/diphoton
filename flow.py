@@ -34,6 +34,8 @@ var_list = [
     "etaWidth",
     "phiWidth",
     "s4",
+    "sieie",
+    "sieip",
 ]
 
 conditions_list = ["pt", "ScEta", "phi", "fixedGridRhoAll", "mass"]
@@ -384,7 +386,7 @@ torch.save(
 
 # %% flow training
 
-device = torch.device("cpu" if torch.cuda.is_available() else "cpu")
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 stream = open(path + "flow_config.yaml", "r")
 dictionary = yaml.load(stream, Loader)
