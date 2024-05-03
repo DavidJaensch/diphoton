@@ -1,8 +1,8 @@
 configuration:
-  n_transforms   : 5
+  n_transforms   : 8
   aux_nodes      : 128
-  aux_layers     : 3
-  n_splines_bins : 8
+  aux_layers     : 5
+  n_splines_bins : 12
   initial_lr     : 1.0e-3
   batch_size     : 1024
-  max_epochs     : 25
+  max_epochs     : 40

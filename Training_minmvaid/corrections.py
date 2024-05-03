@@ -27,10 +27,9 @@ def load_data(path):
     # Load test_inputs and test_conditions from files
     test_inputs = torch.load(path + "test_inputs.pt")
     test_conditions = torch.load(path + "test_conditions.pt")
-    test_meta_data = torch.load(path + "test_meta_data.pt")
     test_weights = torch.load(path + "test_weights.pt")
 
-    return test_inputs, test_conditions, test_meta_data, test_weights
+    return test_inputs, test_conditions, test_weights
 
 
 def split_data(test_inputs, test_conditions, all_info_test, test_weights):
@@ -116,12 +115,12 @@ def load_parquet_files(path_df):
 
 
 # Set the path
-path = "/home/home1/institut_3a/jaensch/Documents/BA/BA/Diphoton/"
+path = "/home/home1/institut_3a/jaensch/Documents/BA/BA/Diphoton/Training_minmvaid/"
 path_df = "/net/scratch_cms3a/daumann/normalizing_flows_project/script_to_prepare_samples_for_paper/splited_parquet/Diphoton_samples/"
 
 all_info_test = pd.read_csv(path + "all_info_test.csv")
 # Load the data
-test_inputs, test_conditions, test_meta_data, test_weights = load_data(path)
+test_inputs, test_conditions, test_weights = load_data(path)
 
 # Split the data
 (diphoton_inputs, diphoton_conditions, diphoton_all_info, diphoton_weights), (
@@ -148,15 +147,44 @@ samples_gjet = apply_flow_and_invert_standardization(
 # Load parquet files
 df_data, df_Diphoton, df_GJEt = load_parquet_files(path_df)
 
+var_list = [
+    "r9",
+    "etaWidth",
+    "phiWidth",
+    "s4",
+    "sieie",
+    "sieip",
+]
 
-def apply_mask(df):
-    mask = (df["mass"] > 100) & (df["mass"] < 180) & (df["lead_mvaID"] > 0.5)
-    return df[mask]
+conditions_list = ["pt", "ScEta", "phi", "fixedGridRhoAll", "mass"]
 
+# Define the variables you want to select
+other_vars = [
+    "energyRaw",
+    "hoe",
+    "ecalPFClusterIso",
+    "hcalPFClusterIso",
+    "trkSumPtHollowConeDR03",
+    "trkSumPtSolidConeDR04",
+    "pfChargedIso",
+    "pfChargedIsoWorstVtx",
+    "esEffSigmaRR",
+    "esEnergyOverRawE",
+]
+variables = var_list + conditions_list + other_vars
 
-df_data = apply_mask(df_data)
-df_Diphoton = apply_mask(df_Diphoton)
-df_GJEt = apply_mask(df_GJEt)
+variables_no_prefix = ["mass", "fixedGridRhoAll"]
+
+# For each variable, add a new column to the DataFrame that contains the value of the variable with the minimum mvaID
+for var in variables:
+    if var in variables_no_prefix:
+        df_data[var + "_minmvaID"] = df_data[var]
+    else:
+        df_data[var + "_minmvaID"] = np.where(
+            df_data["lead_mvaID"] < df_data["sublead_mvaID"],
+            df_data["lead_" + var],
+            df_data["sublead_" + var],
+        )
 
 var_list = [
     "r9",
@@ -166,7 +194,7 @@ var_list = [
     "sieie",
     "sieip",
 ]
-var_list = ["lead_" + s + "_corr_of" for s in var_list]
+var_list = [s + "_minmvaID_corr_of" for s in var_list]
 
 
 df_samples_diphoton = pd.DataFrame(samples_diphoton, columns=var_list)
@@ -209,7 +237,7 @@ utlis.plot_hist_subplots(
     df_data,
     var="photon_corr_mvaID_run3",
     title="No Mask",
-    var_uncorr="lead_mvaID",
+    var_uncorr="min_mvaID",
 )
 
 # %%

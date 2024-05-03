@@ -20,13 +20,14 @@ from yaml import Loader
 # Set the mplhep style to CMS for plots
 hep.style.use("CMS")
 
+
 # %% get data and simulation
 path_df = "/net/scratch_cms3a/daumann/normalizing_flows_project/script_to_prepare_samples_for_paper/splited_parquet/Diphoton_samples/"
 df_data = pd.read_parquet(path_df + "Data_postEE.parquet")
 df_Diphoton = pd.read_parquet(path_df + "Diphoton_postEE.parquet")
 df_GJEt = pd.read_parquet(path_df + "GJEt_postEE.parquet")
 
-path = "/home/home1/institut_3a/jaensch/Documents/BA/BA/Diphoton/"
+path = "/home/home1/institut_3a/jaensch/Documents/BA/BA/Diphoton/Training_minmvaid/"
 
 # %% plot histograms
 var_list = [
@@ -40,84 +41,6 @@ var_list = [
 
 conditions_list = ["pt", "ScEta", "phi", "fixedGridRhoAll", "mass"]
 
-plot_list = ["lead_" + s for s in var_list]
-plot_list.append("mass")
-plot_list.append("lead_pt")
-
-input_list_lead = ["lead_" + s for s in var_list]
-n_input = len(
-    input_list_lead
-)  # so i can add other information i need to the input list, but only use the here defined as input
-n_conditions = len(conditions_list)
-conditions_list_lead = ["lead_" + s for s in conditions_list[:-2]]
-conditions_list_lead.append("fixedGridRhoAll")
-conditions_list_lead.append("mass")
-
-
-def plot_hist(df_diphoton, df_g_jet, df_data, var):
-    plt.clf()
-    plt.style.use(hep.style.CMS)
-
-    # Calculate the mean and standard deviation of the data
-    mean = np.mean(np.concatenate([df_diphoton[var], df_g_jet[var], df_data[var]]))
-    std = np.std(np.concatenate([df_diphoton[var], df_g_jet[var], df_data[var]]))
-
-    # Define the bins for the histogram
-    if var == "mass":
-        min_value = max_value = int(
-            np.floor(
-                np.min(np.concatenate([df_diphoton[var], df_g_jet[var], df_data[var]]))
-            )
-        )
-        max_value = int(
-            np.ceil(
-                np.max(np.concatenate([df_diphoton[var], df_g_jet[var], df_data[var]]))
-            )
-        )
-        num_bins = max_value - min_value
-    else:
-        num_bins = 100
-        min_value = mean - 3 * std
-        max_value = mean + 3 * std
-
-    # Create the diphoton and g_jet histograms and stack them
-    hist_diphoton = (
-        hist.Hist.new.Reg(num_bins, min_value, max_value)
-        .Weight()
-        .fill(df_diphoton[var], weight=df_diphoton["weight"])
-    )
-    hist_g_jet = (
-        hist.Hist.new.Reg(num_bins, min_value, max_value)
-        .Weight()
-        .fill(df_g_jet[var], weight=df_g_jet["weight"])
-    )
-    hep.histplot(
-        [hist_diphoton, hist_g_jet],
-        stack=True,
-        histtype="fill",
-        label=["Diphoton", "G Jet"],
-    )
-
-    # Create the data histogram and plot it with only the top marks
-    hist_data = (
-        hist.Hist.new.Reg(num_bins, min_value, max_value)
-        .Weight()
-        .fill(df_data[var], weight=df_data["weight"])
-    )
-    bin_edges = hist_data.axes[0].edges
-    bin_centers = 0.5 * (bin_edges[:-1] + bin_edges[1:])
-    plt.errorbar(bin_centers, hist_data.values(), fmt="x", color="black", label="Data")
-
-    plt.xlabel(var)
-    plt.ylabel("Events/Bin")
-    plt.legend()
-    hep.cms.label("Work in Progress", data=False)
-    plt.savefig(path + f"hist_{var}.png")
-    plt.show()
-
-
-for var in plot_list:
-    plot_hist(df_Diphoton, df_GJEt, df_data, var)
 # %%
 df_Diphoton["origin"] = 1
 df_GJEt["origin"] = 0
@@ -132,18 +55,11 @@ df_data["is_data"] = 1
 
 # Combine the simulation and data dataframes
 combined_df = pd.concat([mc_df, df_data])
-selection_mass = (
-    (combined_df["mass"] > 100)
-    & (combined_df["mass"] < 180)
-    & (combined_df["lead_mvaID"] > 0.5)
-)
+selection_mass = (combined_df["mass"] > 100) & (combined_df["mass"] < 180)
 combined_df = combined_df[selection_mass]
-# combined_df = combined_df.reset_index(drop=True)
-
-meta_list = [
+# Define the variables you want to select
+other_vars = [
     "energyRaw",
-    "sieie",
-    "sieip",
     "hoe",
     "ecalPFClusterIso",
     "hcalPFClusterIso",
@@ -153,22 +69,32 @@ meta_list = [
     "pfChargedIsoWorstVtx",
     "esEffSigmaRR",
     "esEnergyOverRawE",
-    "mvaID",
-    "mass",
-    "origin",
-    "weight",
 ]
+variables = var_list + conditions_list + other_vars
 
-meta_list_lead = ["lead_" + s for s in meta_list[:-3]] + meta_list[-3:]
+variables_no_prefix = ["mass", "fixedGridRhoAll"]
 
-input_list_lead = input_list_lead + meta_list_lead
+# For each variable, add a new column to the DataFrame that contains the value of the variable with the minimum mvaID
+for var in variables:
+    if var in variables_no_prefix:
+        combined_df[var + "_minmvaID"] = combined_df[var]
+    else:
+        combined_df[var + "_minmvaID"] = np.where(
+            combined_df["lead_mvaID"] < combined_df["sublead_mvaID"],
+            combined_df["lead_" + var],
+            combined_df["sublead_" + var],
+        )
+
+input_list = [var + "_minmvaID" for var in var_list]
+conditions_list = [var + "_minmvaID" for var in conditions_list]
+
 
 # Split the combined dataframe into inputs and conditions
-inputs = combined_df[input_list_lead]
+inputs = combined_df[input_list + ["weight"]]
 conditions = combined_df[
-    conditions_list_lead + ["is_data"]
+    conditions_list + ["is_data"]
 ]  # Include the 'is_data' column in the conditions
-# """
+
 # Identify indices of rows with nan in either DataFrame
 nan_rows = inputs.isnull().any(axis=1) | conditions.isnull().any(axis=1)
 
@@ -176,8 +102,7 @@ nan_rows = inputs.isnull().any(axis=1) | conditions.isnull().any(axis=1)
 inputs = inputs.loc[~nan_rows]
 conditions = conditions.loc[~nan_rows]
 all_info = combined_df.loc[~nan_rows]
-# """
-# all_info = combined_df
+
 # Split the inputs and conditions into training, testing, and validation sets
 (
     inputs_train,
@@ -202,7 +127,6 @@ all_info = combined_df.loc[~nan_rows]
 training_inputs = torch.Tensor(np.array(inputs_train))
 validation_inputs = torch.Tensor(np.array(inputs_val))
 test_inputs = torch.Tensor(np.array(inputs_test))
-
 
 training_conditions = torch.Tensor(np.array(conditions_train))
 validation_conditions = torch.Tensor(np.array(conditions_val))
@@ -282,19 +206,16 @@ validation_inputs = apply_scaling(
 test_inputs = apply_scaling(test_inputs, test_conditions, scaling_factors)
 
 # Separate the weights and meta data from the rest of the data
-training_inputs, training_meta_data, training_weights = (
-    training_inputs[:, :n_input],
-    training_inputs[:, n_input:-1],
+training_inputs, training_weights = (
+    training_inputs[:, :-1],
     training_inputs[:, -1],
 )
-validation_inputs, validation_meta_data, validation_weights = (
-    validation_inputs[:, :n_input],
-    validation_inputs[:, n_input:-1],
+validation_inputs, validation_weights = (
+    validation_inputs[:, :-1],
     validation_inputs[:, -1],
 )
-test_inputs, test_meta_data, test_weights = (
-    test_inputs[:, :n_input],
-    test_inputs[:, n_input:-1],
+test_inputs, test_weights = (
+    test_inputs[:, :-1],
     test_inputs[:, -1],
 )
 # %%
@@ -364,10 +285,7 @@ torch.save(
     test_conditions,
     path + "test_conditions.pt",
 )
-torch.save(
-    test_meta_data,
-    path + "test_meta_data.pt",
-)
+
 torch.save(
     test_weights,
     path + "test_weights.pt",
@@ -381,10 +299,7 @@ torch.save(
     training_conditions,
     path + "training_conditions.pt",
 )
-torch.save(
-    training_meta_data,
-    path + "training_meta_data.pt",
-)
+
 torch.save(
     training_weights,
     path + "training_weights.pt",
@@ -536,5 +451,3 @@ utlis.plot_loss_cruve(
     validation_loss_array,
     path,
 )
-
-# %%
