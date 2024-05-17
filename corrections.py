@@ -22,6 +22,8 @@ hep.style.use("CMS")
 
 device = torch.device("cpu")
 
+mva_id_mask = True
+
 
 def load_data(path):
     # Load test_inputs and test_conditions from files
@@ -54,7 +56,11 @@ def split_data(test_inputs, test_conditions, all_info_test, test_weights):
 
 def load_model(path):
     # Load the model
-    model = torch.load(path + "results/saved_states/best_model_.pth")
+    model = (
+        torch.load(path + "results/saved_states/best_model_mva_id_mask.pth")
+        if mva_id_mask
+        else torch.load(path + "results/saved_states/best_model_.pth")
+    )
 
     stream = open(path + "flow_config.yaml", "r")
     dictionary = yaml.load(stream, Loader)
@@ -92,6 +98,11 @@ def create_flow(test_inputs, test_conditions, dictionary, device):
 
     flow.load_state_dict(
         torch.load(
+            path + "results/saved_states/best_model_mva_id_mask.pth",
+            map_location=torch.device("cpu"),
+        )
+        if mva_id_mask
+        else torch.load(
             path + "results/saved_states/best_model_.pth",
             map_location=torch.device("cpu"),
         )
@@ -137,6 +148,8 @@ model, dictionary = load_model(path)
 # Create the flow
 flow = create_flow(test_inputs, test_conditions, dictionary, device)
 
+utlis.basespace(test_inputs, test_conditions, flow)
+
 # Apply the flow and invert standardization
 samples_diphoton = apply_flow_and_invert_standardization(
     diphoton_inputs, diphoton_conditions, flow, path
@@ -150,7 +163,11 @@ df_data, df_Diphoton, df_GJEt = load_parquet_files(path_df)
 
 
 def apply_mask(df):
-    mask = (df["mass"] > 100) & (df["mass"] < 180) & (df["lead_mvaID"] > 0.5)
+    mask = (
+        (df["mass"] > 100) & (df["mass"] < 180) & (df["lead_mvaID"] > 0.5)
+        if mva_id_mask
+        else True
+    )
     return df[mask]
 
 

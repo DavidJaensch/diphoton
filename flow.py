@@ -20,13 +20,48 @@ from yaml import Loader
 # Set the mplhep style to CMS for plots
 hep.style.use("CMS")
 
-# %% get data and simulation
-path_df = "/net/scratch_cms3a/daumann/normalizing_flows_project/script_to_prepare_samples_for_paper/splited_parquet/Diphoton_samples/"
-df_data = pd.read_parquet(path_df + "Data_postEE.parquet")
-df_Diphoton = pd.read_parquet(path_df + "Diphoton_postEE.parquet")
-df_GJEt = pd.read_parquet(path_df + "GJEt_postEE.parquet")
+mva_id_mask = True
+scaled = True
+stacked = True
 
-path = "/home/home1/institut_3a/jaensch/Documents/BA/BA/Diphoton/"
+
+def create_directory(dir_path):
+    if not os.path.exists(dir_path):
+        os.makedirs(dir_path)
+
+
+# %% get data and simulation
+if scaled == False:
+    path_df = "/net/scratch_cms3a/daumann/normalizing_flows_project/script_to_prepare_samples_for_paper/splited_parquet/Diphoton_samples/"
+    df_data = pd.read_parquet(path_df + "Data_postEE.parquet")
+    df_Diphoton = pd.read_parquet(path_df + "Diphoton_postEE.parquet")
+    df_GJEt = pd.read_parquet(path_df + "GJEt_postEE.parquet")
+
+    path = "/home/home1/institut_3a/jaensch/Documents/BA/BA/Diphoton/unscaled/"
+    path_base = "/home/home1/institut_3a/jaensch/Documents/BA/BA/Diphoton/"
+
+elif scaled == True and stacked == True:
+    path_df = "/net/scratch_cms3a/daumann/normalizing_flows_project/script_to_prepare_samples_for_paper/diphoton_samples/Scale_diphoton_and_GJet/"
+    df_data = pd.read_parquet(path_df + "Data_postEE.parquet")
+    df_Diphoton = pd.read_parquet(path_df + "Diphoton_postEE.parquet")
+    df_GJEt = pd.read_parquet(path_df + "GJEt_postEE.parquet")
+
+    path = "/home/home1/institut_3a/jaensch/Documents/BA/BA/Diphoton/scaled/"
+    path_base = "/home/home1/institut_3a/jaensch/Documents/BA/BA/Diphoton/"
+
+elif scaled == True and stacked == False:
+    path_df = "/net/scratch_cms3a/daumann/normalizing_flows_project/script_to_prepare_samples_for_paper/diphoton_samples/Scale_only_diphoton/"
+    df_data = pd.read_parquet(path_df + "Data_postEE.parquet")
+    df_Diphoton = pd.read_parquet(path_df + "Diphoton_postEE.parquet")
+    df_GJEt = pd.read_parquet(path_df + "GJEt_postEE.parquet")
+
+    path = (
+        "/home/home1/institut_3a/jaensch/Documents/BA/BA/Diphoton/scaled_only_diphoton/"
+    )
+    path_base = "/home/home1/institut_3a/jaensch/Documents/BA/BA/Diphoton/"
+
+
+create_directory(path)
 
 # %% plot histograms
 var_list = [
@@ -41,6 +76,8 @@ var_list = [
 conditions_list = ["pt", "ScEta", "phi", "fixedGridRhoAll", "mass"]
 
 plot_list = ["lead_" + s for s in var_list]
+
+plot_list = ["lead_" + s for s in var_list]
 plot_list.append("mass")
 plot_list.append("lead_pt")
 
@@ -53,6 +90,71 @@ conditions_list_lead = ["lead_" + s for s in conditions_list[:-2]]
 conditions_list_lead.append("fixedGridRhoAll")
 conditions_list_lead.append("mass")
 
+"""
+if scaled == False:
+    plot_list = ["lead_" + s for s in var_list]
+    plot_list.append("mass")
+    plot_list.append("lead_pt")
+
+    input_list_lead = ["lead_" + s for s in var_list]
+    n_input = len(
+        input_list_lead
+    )  # so i can add other information i need to the input list, but only use the here defined as input
+    n_conditions = len(conditions_list)
+    conditions_list_lead = ["lead_" + s for s in conditions_list[:-2]]
+    conditions_list_lead.append("fixedGridRhoAll")
+    conditions_list_lead.append("mass")
+    df_data["lead_corr_mvaID_run3"] = df_data["lead_mvaID"]
+    df_Diphoton["lead_corr_mvaID_run3"] = df_Diphoton["lead_mvaID"]
+    df_GJEt["lead_corr_mvaID_run3"] = df_GJEt["lead_mvaID"]
+
+elif scaled == True and stacked == True:
+    plot_list = ["lead_corr_" + s for s in var_list]
+    plot_list.append("mass")
+    plot_list.append("lead_pt")
+
+    input_list_lead = ["lead_corr_" + s for s in var_list]
+    n_input = len(
+        input_list_lead
+    )  # so i can add other information i need to the input list, but only use the here defined as input
+    n_conditions = len(conditions_list)
+    conditions_list_lead = ["lead_" + s for s in conditions_list[:-2]]
+    conditions_list_lead.append("fixedGridRhoAll")
+    conditions_list_lead.append("mass")
+
+    variables_no_prefix = ["mass", "fixedGridRhoAll"]
+
+    for var in var_list:
+        if var in variables_no_prefix:
+            df_data[var] = df_data[var]
+        else:
+            df_data["lead_corr_" + var] = df_data["lead_" + var]
+            df_data["lead_corr_mvaID_run3"] = df_data["lead_mvaID"]
+
+elif scaled == True and stacked == False:
+    plot_list = ["lead_corr_" + s for s in var_list]
+    plot_list.append("mass")
+    plot_list.append("lead_pt")
+
+    input_list_lead = ["lead_corr_" + s for s in var_list]
+    n_input = len(
+        input_list_lead
+    )  # so i can add other information i need to the input list, but only use the here defined as input
+    n_conditions = len(conditions_list)
+    conditions_list_lead = ["lead_" + s for s in conditions_list[:-2]]
+    conditions_list_lead.append("fixedGridRhoAll")
+    conditions_list_lead.append("mass")
+
+    variables_no_prefix = ["mass", "fixedGridRhoAll"]
+
+    for var in var_list:
+        df_data["lead_corr_" + var] = df_data["lead_" + var]
+        df_data["lead_corr_mvaID_run3"] = df_data["lead_mvaID"]
+        df_GJEt["lead_corr_" + var] = df_GJEt["lead_" + var]
+        df_data["lead_corr_mvaID_run3"] = df_data["lead_mvaID"]
+
+"""
+
 
 def plot_hist(df_diphoton, df_g_jet, df_data, var):
     plt.clf()
@@ -64,19 +166,11 @@ def plot_hist(df_diphoton, df_g_jet, df_data, var):
 
     # Define the bins for the histogram
     if var == "mass":
-        min_value = max_value = int(
-            np.floor(
-                np.min(np.concatenate([df_diphoton[var], df_g_jet[var], df_data[var]]))
-            )
-        )
-        max_value = int(
-            np.ceil(
-                np.max(np.concatenate([df_diphoton[var], df_g_jet[var], df_data[var]]))
-            )
-        )
-        num_bins = max_value - min_value
+        min_value = 100
+        max_value = 180
+        num_bins = 50
     else:
-        num_bins = 100
+        num_bins = 50
         min_value = mean - 3 * std
         max_value = mean + 3 * std
 
@@ -84,13 +178,24 @@ def plot_hist(df_diphoton, df_g_jet, df_data, var):
     hist_diphoton = (
         hist.Hist.new.Reg(num_bins, min_value, max_value)
         .Weight()
-        .fill(df_diphoton[var], weight=df_diphoton["weight"])
+        .fill(
+            df_diphoton.loc[df_diphoton["lead_mvaID"] > 0.5, var],
+            weight=df_diphoton.loc[df_diphoton["lead_mvaID"] > 0.5, "weight"],
+        )
     )
     hist_g_jet = (
         hist.Hist.new.Reg(num_bins, min_value, max_value)
         .Weight()
-        .fill(df_g_jet[var], weight=df_g_jet["weight"])
+        .fill(
+            df_g_jet.loc[df_g_jet["lead_mvaID"] > 0.5, var],
+            weight=df_g_jet.loc[df_g_jet["lead_mvaID"] > 0.5, "weight"],
+        )
     )
+    sum_mc = hist_diphoton.values().sum() + hist_g_jet.values().sum()
+    bin_width = (max_value - min_value) / num_bins
+    hist_diphoton = hist_diphoton / (sum_mc * bin_width)
+    hist_g_jet = hist_g_jet / (sum_mc * bin_width)
+
     hep.histplot(
         [hist_diphoton, hist_g_jet],
         stack=True,
@@ -102,8 +207,12 @@ def plot_hist(df_diphoton, df_g_jet, df_data, var):
     hist_data = (
         hist.Hist.new.Reg(num_bins, min_value, max_value)
         .Weight()
-        .fill(df_data[var], weight=df_data["weight"])
+        .fill(
+            df_data.loc[df_data["lead_mvaID"] > 0.5, var],
+            weight=df_data.loc[df_data["lead_mvaID"] > 0.5, "weight"],
+        )
     )
+    hist_data = hist_data / (hist_data.values().sum() * bin_width)
     bin_edges = hist_data.axes[0].edges
     bin_centers = 0.5 * (bin_edges[:-1] + bin_edges[1:])
     plt.errorbar(bin_centers, hist_data.values(), fmt="x", color="black", label="Data")
@@ -118,6 +227,7 @@ def plot_hist(df_diphoton, df_g_jet, df_data, var):
 
 for var in plot_list:
     plot_hist(df_Diphoton, df_GJEt, df_data, var)
+
 # %%
 df_Diphoton["origin"] = 1
 df_GJEt["origin"] = 0
@@ -132,36 +242,22 @@ df_data["is_data"] = 1
 
 # Combine the simulation and data dataframes
 combined_df = pd.concat([mc_df, df_data])
-selection_mass = (
-    (combined_df["mass"] > 100)
-    & (combined_df["mass"] < 180)
-    & (combined_df["lead_mvaID"] > 0.5)
-)
+if scaled == False:
+    selection_mass = (
+        (combined_df["mass"] > 100)
+        & (combined_df["mass"] < 180)
+        & ((combined_df["lead_mvaID"] > 0.5) if mva_id_mask else True)
+    )
+else:
+    selection_mass = (
+        (combined_df["mass"] > 100)
+        & (combined_df["mass"] < 180)
+        & ((combined_df["lead_mvaID"] > 0.5) if mva_id_mask else True)
+    )
 combined_df = combined_df[selection_mass]
-# combined_df = combined_df.reset_index(drop=True)
 
-meta_list = [
-    "energyRaw",
-    "sieie",
-    "sieip",
-    "hoe",
-    "ecalPFClusterIso",
-    "hcalPFClusterIso",
-    "trkSumPtHollowConeDR03",
-    "trkSumPtSolidConeDR04",
-    "pfChargedIso",
-    "pfChargedIsoWorstVtx",
-    "esEffSigmaRR",
-    "esEnergyOverRawE",
-    "mvaID",
-    "mass",
-    "origin",
-    "weight",
-]
 
-meta_list_lead = ["lead_" + s for s in meta_list[:-3]] + meta_list[-3:]
-
-input_list_lead = input_list_lead + meta_list_lead
+input_list_lead = input_list_lead + ["weight"]
 
 # Split the combined dataframe into inputs and conditions
 inputs = combined_df[input_list_lead]
@@ -282,31 +378,28 @@ validation_inputs = apply_scaling(
 test_inputs = apply_scaling(test_inputs, test_conditions, scaling_factors)
 
 # Separate the weights and meta data from the rest of the data
-training_inputs, training_meta_data, training_weights = (
+training_inputs, training_weights = (
     training_inputs[:, :n_input],
-    training_inputs[:, n_input:-1],
     training_inputs[:, -1],
 )
-validation_inputs, validation_meta_data, validation_weights = (
+validation_inputs, validation_weights = (
     validation_inputs[:, :n_input],
-    validation_inputs[:, n_input:-1],
     validation_inputs[:, -1],
 )
-test_inputs, test_meta_data, test_weights = (
+test_inputs, test_weights = (
     test_inputs[:, :n_input],
-    test_inputs[:, n_input:-1],
     test_inputs[:, -1],
 )
 # %%
 # standardize the data
-
+"""
 np.save(
     path + "input_means.npy",
     training_inputs.mean(dim=0).numpy(),
 )
 np.save(
     path + "input_std.npy",
-    training_inputs.std(dim=0).numpy(),
+    training_inputs.std(dim=0).numpy() * 2,
 )
 np.save(
     path + "conditions_means.npy",
@@ -314,8 +407,50 @@ np.save(
 )
 np.save(
     path + "conditions_std.npy",
-    training_conditions[:, :-1].std(dim=0).numpy(),
+    training_conditions[:, :-1].std(dim=0).numpy() * 2,
 )
+"""
+np.save(
+    path + "input_means.npy",
+    np.average(training_inputs, weights=training_weights, axis=0),
+)
+np.save(
+    path + "input_std.npy",
+    np.sqrt(
+        np.average(
+            (
+                training_inputs
+                - np.average(training_inputs, weights=training_weights, axis=0)
+            )
+            ** 2,
+            weights=training_weights,
+            axis=0,
+        )
+    )
+    * 2,
+)
+np.save(
+    path + "conditions_means.npy",
+    np.average(training_conditions[:, :-1], weights=training_weights, axis=0),
+)
+np.save(
+    path + "conditions_std.npy",
+    np.sqrt(
+        np.average(
+            (
+                training_conditions[:, :-1]
+                - np.average(
+                    training_conditions[:, :-1], weights=training_weights, axis=0
+                )
+            )
+            ** 2,
+            weights=training_weights,
+            axis=0,
+        )
+    )
+    * 2,
+)
+
 
 (
     training_inputs,
@@ -329,6 +464,30 @@ np.save(
     training_conditions,
     path=path,
 )
+
+# Convert tensor to numpy array
+zmmg_inputs_np = training_inputs.numpy()
+
+
+# Convert numpy array to DataFrame
+zmmg_inputs_df = pd.DataFrame(zmmg_inputs_np)
+
+# Plot histograms
+zmmg_inputs_df.hist(bins=50, figsize=(20, 15))
+plt.tight_layout()
+plt.savefig(path + "hist_inputs.png")
+plt.show()
+
+zmmg_inputs_np = training_conditions.numpy()
+
+# Convert numpy array to DataFrame
+zmmg_inputs_df = pd.DataFrame(zmmg_inputs_np)
+
+# Plot histograms
+zmmg_inputs_df.hist(bins=50, figsize=(20, 15))
+plt.tight_layout()
+plt.savefig(path + "hist_conditions.png")
+plt.show()
 
 (
     test_inputs,
@@ -364,10 +523,7 @@ torch.save(
     test_conditions,
     path + "test_conditions.pt",
 )
-torch.save(
-    test_meta_data,
-    path + "test_meta_data.pt",
-)
+
 torch.save(
     test_weights,
     path + "test_weights.pt",
@@ -381,10 +537,7 @@ torch.save(
     training_conditions,
     path + "training_conditions.pt",
 )
-torch.save(
-    training_meta_data,
-    path + "training_meta_data.pt",
-)
+
 torch.save(
     training_weights,
     path + "training_weights.pt",
@@ -395,7 +548,7 @@ torch.save(
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-stream = open(path + "flow_config.yaml", "r")
+stream = open(path_base + "flow_config.yaml", "r")
 dictionary = yaml.load(stream, Loader)
 
 for key in dictionary:
@@ -440,12 +593,6 @@ validation_loss_array = []
 
 training_inputs = training_inputs.type(dtype=training_conditions.dtype)
 flow = flow.type(training_inputs.dtype)
-
-# training_weights = training_weights / torch.sum(training_weights)
-# validation_weights = validation_weights / torch.sum(validation_weights)
-
-print(training_weights)
-print(validation_weights)
 
 print("Start training")
 save_dir = path + "results/saved_states"
@@ -526,7 +673,10 @@ for epoch in range(999):
                 + ".pth"
             )
         )
-        torch.save(flow.state_dict(), save_dir + "/best_model_.pth")
+        if mva_id_mask == True:
+            torch.save(flow.state_dict(), save_dir + "/best_model_mva_id_mask.pth")
+        else:
+            torch.save(flow.state_dict(), save_dir + "/best_model_.pth")
 
         break
 

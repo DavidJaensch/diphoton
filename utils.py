@@ -1,5 +1,6 @@
 # python libraries import
 import glob
+import math
 import os
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -12,6 +13,10 @@ import pandas as pd
 import torch
 import xgboost
 import zuko
+from scipy.stats import norm
+
+path = "/home/home1/institut_3a/jaensch/Documents/BA/BA/Diphoton/"
+path_save = "/home/home1/institut_3a/jaensch/Documents/BA/BA/Diphoton/"
 
 
 def standardize(input_tensor, conditions_tensor, path):
@@ -21,9 +26,9 @@ def standardize(input_tensor, conditions_tensor, path):
     condition_mean_for_std = torch.tensor(np.load(path + "conditions_means.npy"))
     condition_std_for_std = torch.tensor(np.load(path + "conditions_std.npy"))
     input_tensor = (input_tensor - input_mean_for_std) / input_std_for_std
-    conditions_tensor[:, :-1] = (
-        conditions_tensor[:, :-1] - condition_mean_for_std
-    ) / condition_std_for_std
+    conditions_tensor[:, :-1] = (conditions_tensor[:, :-1] - condition_mean_for_std) / (
+        condition_std_for_std
+    )
     return (
         input_tensor,
         conditions_tensor,
@@ -63,6 +68,83 @@ def plot_loss_cruve(training, validation, plot_path):
 
     plt.savefig(plot_path + "loss_plot.png")
     plt.close()
+
+
+def basespace(input_tensor, conditions_tensor, flow):
+    flow = flow.type(input_tensor.dtype)
+    conditions_tensor = conditions_tensor.type(input_tensor.dtype)
+
+    # Use cuda if avaliable - maybe this is causing the memory problems?
+    device = torch.device("cpu")
+    flow = flow.to(device)
+    input_tensor = input_tensor.to(device)
+    conditions_tensor = conditions_tensor.to(device)
+
+    # Disabling pytorch gradient calculation so operation uses less memory and is faster
+    with torch.no_grad():
+
+        # Now the flow transformation is done!
+        trans = flow(conditions_tensor).transform
+        samples = trans(input_tensor)
+
+    # Calculate the number of rows and columns for the subplots
+    num_features = samples.shape[1]
+    num_cols = 3
+    num_rows = math.ceil(num_features / num_cols)
+
+    # Create the subplots
+    fig, axs = plt.subplots(num_rows, num_cols, figsize=(15, num_rows * 5))
+    axs = axs.flatten()  # Flatten the array of axes to make it easier to iterate over
+
+    # Define the bin width
+    bin_width = 0.1
+
+    # Iterate over each feature
+    for i in range(num_features):
+        # Select the data for this feature
+        feature_data = samples[:, i].detach().numpy()
+
+        # Calculate the number of bins
+        bins = np.arange(min(feature_data), max(feature_data) + bin_width, bin_width)
+
+        # Fit a Gaussian
+        mu, std = norm.fit(feature_data)
+
+        # Plot the histogram
+        axs[i].hist(feature_data, bins=bins, density=True, alpha=0.6, color="g")
+
+        # Set the x-axis limits
+        axs[i].set_xlim([-6, 6])
+
+        # Plot the PDF of the Gaussian
+        xmin, xmax = -6, 6
+        x = np.linspace(xmin, xmax, 100)
+        p = norm.pdf(x, mu, std)
+        axs[i].plot(x, p, "k", linewidth=2)
+
+        # Plot the comparison normal distribution
+        p_compare = norm.pdf(x, 0, 1)
+        axs[i].plot(x, p_compare, "r", linewidth=2)
+
+        # Add a label with the mean and standard deviation
+        axs[i].text(
+            0.6,
+            0.8,
+            f"mu = {mu:.2f}\nstd = {std:.2f}",
+            transform=axs[i].transAxes,
+            fontsize=12,
+        )
+
+    # Remove any unused subplots
+    for i in range(num_features, len(axs)):
+        fig.delaxes(axs[i])
+
+    # Save the figure
+    plt.savefig(f"{path}basespace.png")
+    plt.show()
+    plt.clf()  # Clear the current figure for the next plot
+
+    return
 
 
 def apply_flow(
@@ -353,6 +435,7 @@ def plot_hist(
         histtype="step",
         label=["MC uncorrected", "MC corrected"],
         ax=axs[0],
+        yerr=None,
     )
 
     axs[0].set_xlabel(var)
@@ -373,6 +456,7 @@ def plot_hist(
         histtype="step",
         label=["MC uncorrected", "MC corrected"],
         ax=axs[1],
+        yerr=None,
     )
 
     axs[1].set_xlabel(var)
